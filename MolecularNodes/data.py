@@ -1,8 +1,7 @@
-# these are some data dictionaries that are used throughout the addon
-# Usually it's for converting things like Amino Acid names into their
-# numerical representation in alphabetical order, or converting the name
-# of an element to its atomic number etc
-
+# These are some data dictionaries that are used throughout Molecular Nodes
+# Usually it's for converting things like amino acid names
+# into their numerical representation in alphabetical order,
+# or converting the name of an element to its atomic number, etc.
 
 # vdw_radii given in picometres
 elements = {

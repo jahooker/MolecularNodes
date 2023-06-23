@@ -4,9 +4,9 @@ from . import nodes
 import biotite.structure.io.pdbx as pdbx
 import re
 
-def get_transformations_pdbx(file_pdbx):
-    # The output transform_dict has an entry for each transformation,
-    # indexable by the string integer of the assembly number (e.g. transform_dict.get('1'))
+def get_transformations_pdbx(file_pdbx) -> dict:
+    # The output has an entry for each transformation,
+    # indexable by the string integer of the assembly number (e.g. transform_dict['1'])
     # which contains tuple of the 3x3 rotation matrix and the 1x3 transform matrix
     return pdbx.convert._get_transformations(file_pdbx.get_category('pdbx_struct_oper_list'))
 
@@ -27,21 +27,22 @@ def get_transformations_pdb(file_pdb):
         yield (sym_array[i:i+3,:3],
                sym_array[i:i+3,3:].reshape((1, 3)))
 
-def get_transformations_mmtf(all_assemblies, world_scale = 0.01):
+def get_transformations_mmtf(assemblies, world_scale=0.01):
     """
-    returns a (N, 3, 4) numpy matrix, where N is the number of transformations required
+    Returns a (N, 3, 4) `numpy.array`, where N is the number of transformations required
     to build out the biological assembly. Currently only extracts and supports the
-    first biological assembly, but this should be straightforward to expand to more assemblies
-    but would require more tweaking with the creation of the nodes themselves than this function
+    first biological assembly, but this should be straightforward to expand to more assemblies.
+    That would require more tweaking with node creation.
     """
-    assembly = all_assemblies[0]['transformList']
+    assembly = assemblies[0]['transformList']
     n = len(assembly)
     # FIXME nx3x4 or nx4x4?
     return np.array([item['matrix'] for item in assembly]).reshape((n, 4, 4))
 
-def create_assembly_node(name, trans_mat):
+def create_assembly_node(name, transformation_matrices: list):
 
-    if (node_mat := bpy.data.node_groups.get(f'MOL_RotTransMat_{name}')):
+    node_mat = bpy.data.node_groups.get(f'MOL_RotTransMat_{name}')
+    if node_mat:
         return node_mat
 
     node_mat = nodes.gn_new_group_empty(f'MOL_RotTransMat_{name}')
@@ -51,8 +52,7 @@ def create_assembly_node(name, trans_mat):
 
     node_transforms = [nodes.rotation_matrix(
         node_group=node_mat, mat=mat, location=[0, 300 * -i]
-    ) for i, mat in enumerate(trans_mat)]
-
+    ) for i, mat in enumerate(transformation_matrices)]
 
     node_join = node_mat.nodes.new('GeometryNodeJoinGeometry')
     node_join.location = [300, 0]
@@ -64,7 +64,7 @@ def create_assembly_node(name, trans_mat):
 
     return node_mat
 
-def create_biological_assembly_node(name, transform_dict):
+def create_biological_assembly_node(name, transformation_matrices: list):
 
     node_bio = bpy.data.node_groups.get(f'MOL_assembly_{name}')
     if node_bio:
@@ -72,19 +72,17 @@ def create_biological_assembly_node(name, transform_dict):
 
     # try to create the assembly transformation nodes first,
     # so if they fail, nothing else is created
-    data_trans = create_assembly_node(name, transform_dict)
+    data_trans = create_assembly_node(name, transformation_matrices)
 
     node_bio = nodes.gn_new_group_empty(f'MOL_assembly_{name}')
 
     node_input = node_bio.nodes[bpy.app.translations.pgettext_data("Group Input",)]
     node_output = node_bio.nodes[bpy.app.translations.pgettext_data("Group Output",)]
-
-
     node_output.location = [400, 0]
 
     node_assembly = nodes.add_custom_node_group_to_node(node_bio, 'MOL_utils_bio_assembly', location=[0, 0])
 
-    node_trans = nodes.add_custom_node_group_to_node(node_bio, data_trans.name, location = [-400, -200])
+    node_trans = nodes.add_custom_node_group_to_node(node_bio, data_trans.name, location=[-400, -200])
 
     link = node_bio.links.new
 

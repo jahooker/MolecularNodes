@@ -326,10 +326,10 @@ def load_trajectory(file_top, file_traj, name="NewTrajectory", md_start=0, md_en
         for sel in custom_selections:
             try:
                 obj.add_attribute(
-                    object=mol_object, 
+                    obj=mol_object, 
                     name=sel.name, 
                     data=bool_selection(sel.selection), 
-                    type = "BOOLEAN", 
+                    data_type = "BOOLEAN", 
                     domain = "POINT"
                     )
             except:

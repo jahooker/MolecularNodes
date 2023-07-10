@@ -25,7 +25,7 @@ bpy.types.Scene.mol_import_star_file_name = bpy.props.StringProperty(
 
 
 def load_star_file(
-    file_path, obj_name: str = 'NewStarInstances', node_tree: bool = True, world_scale: float = 0.01
+    file_path, obj_name: str = 'NewStarInstances', world_scale: float = 0.01
 ):
 
     star = starfile.read(file_path, always_dict=True)
@@ -44,9 +44,10 @@ def load_star_file(
     if star_type == 'relion':
         df = star['particles'].merge(star['optics'], on='rlnOpticsGroup')
 
-        # get necessary info from dataframes
-        # Standard cryoEM starfile don't have rlnCoordinateZ. If this column is not present
-        # Set it to "0"
+        # Get necessary info from dataframes.
+
+        # Standard cryoEM starfile don't have rlnCoordinateZ.
+        # If this column is not present, set it to 0.
         if 'rlnCoordinateZ' not in df:
             df['rlnCoordinateZ'] = 0
 
@@ -61,20 +62,17 @@ def load_star_file(
     elif star_type == 'cistem':
         df = star[0]
         df['cisTEMZFromDefocus'] = (df['cisTEMDefocus1'] + df['cisTEMDefocus2']) / 2
-        df['cisTEMZFromDefocus'] = df['cisTEMZFromDefocus'] - df['cisTEMZFromDefocus'].median()
+        df['cisTEMZFromDefocus'] -= df['cisTEMZFromDefocus'].median()
         xyz = df[['cisTEMOriginalXPosition', 'cisTEMOriginalYPosition', 'cisTEMZFromDefocus']].to_numpy()
         euler_angles = df[['cisTEMAnglePhi', 'cisTEMAngleTheta', 'cisTEMAnglePsi']].to_numpy()
         image_id = df['cisTEMOriginalImageFilename'].astype('category').cat.codes.to_numpy()
 
     # Coerce starfile Euler angles to Blender convention
-    target_metadata = ConversionMeta(name='output',
-                                    axes='xyz',
-                                    intrinsic=False,
-                                    right_handed_rotation=True,
-                                    active=True)
+    target_metadata = ConversionMeta(name='output', axes='xyz', intrinsic=False,
+                                     right_handed_rotation=True, active=True)
     eulers = np.deg2rad(convert_eulers(euler_angles,
-                               source_meta='relion',
-                               target_meta=target_metadata))
+                                       source_meta='relion',
+                                       target_meta=target_metadata))
 
     obj = create_object(obj_name, coll.mn(), xyz * world_scale)
 
@@ -102,31 +100,24 @@ def load_star_file(
             # Add the category names as a property to the blender object
             obj[f'{col}_categories'] = list(df[col].astype('category').cat.categories)
 
-    if node_tree:
-        nodes.create_starting_nodes_starfile(obj)
-
     return obj
 
 
 def panel(layout_function, scene):
-    col_main = layout_function.column(heading = "", align = False)
-    col_main.label(text = "Import Star File")
+    col_main = layout_function.column(heading="", align=False)
+    col_main.label(text="Import Star File")
     row_import = col_main.row()
     row_import.prop(
         bpy.context.scene, 'mol_import_star_file_name',
-        text = 'Name',
-        emboss = True
-    )
+        text='Name', emboss=True)
     col_main.prop(
         bpy.context.scene, 'mol_import_star_file_path',
-        text = '.star File Path',
-        emboss = True
-    )
-    row_import.operator('mol.import_star_file', text = 'Load', icon = 'FILE_TICK')
-
+        text='.star File Path', emboss=True)
+    row_import.operator('mol.import_star_file', text='Load', icon='FILE_TICK')
 
 
 class MOL_OT_Import_Star_File(bpy.types.Operator):
+
     bl_idname = "mol.import_star_file"
     bl_label = "Import Star File"
     bl_description = "Will import the given file, setting up the points to instance an object."
@@ -137,9 +128,8 @@ class MOL_OT_Import_Star_File(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        load_star_file(
-            file_path = bpy.context.scene.mol_import_star_file_path,
-            obj_name = bpy.context.scene.mol_import_star_file_name,
-            node_tree = True
-        )
+        obj = load_star_file(
+            file_path=bpy.context.scene.mol_import_star_file_path,
+            obj_name=bpy.context.scene.mol_import_star_file_name)
+        nodes.create_starting_nodes_starfile(obj)
         return {"FINISHED"}

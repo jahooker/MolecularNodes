@@ -21,15 +21,15 @@ def get_transformations_pdb(file_pdb):
                          dtype=np.float32)
 
     k = len(sym_lines)
-    assert sym_array.shape == (k, 4)
-    assert k % 3 == 0, "Symmetry operations shall be represented as 3x4 matrices!"
+    assert sym_array.shape == (k, 4) and k % 3 == 0, \
+        "Symmetry operations shall be represented as 3x4 matrices!"
     for i in range(0, k, 3):
         yield (sym_array[i:i+3,:3],
                sym_array[i:i+3,3:].reshape((1, 3)))
 
-def get_transformations_mmtf(assemblies, world_scale=0.01):
+def get_transformations_mmtf(assemblies) -> np.ndarray[float]:
     """
-    Returns a (N, 3, 4) `numpy.array`, where N is the number of transformations required
+    Returns a (N, 3, 4) `numpy.ndarray`, where N is the number of transformations required
     to build out the biological assembly. Currently only extracts and supports the
     first biological assembly, but this should be straightforward to expand to more assemblies.
     That would require more tweaking with node creation.
@@ -66,8 +66,7 @@ def create_assembly_node(name, transformation_matrices: list):
 
 def create_biological_assembly_node(name, transformation_matrices: list):
 
-    node_bio = bpy.data.node_groups.get(f'MOL_assembly_{name}')
-    if node_bio:
+    if (node_bio := bpy.data.node_groups.get(f'MOL_assembly_{name}')) is not None:
         return node_bio
 
     # try to create the assembly transformation nodes first,
@@ -80,33 +79,20 @@ def create_biological_assembly_node(name, transformation_matrices: list):
     node_output = node_bio.nodes[bpy.app.translations.pgettext_data("Group Output",)]
     node_output.location = [400, 0]
 
-    node_assembly = nodes.add_custom_node_group_to_node(node_bio, 'MOL_utils_bio_assembly', location=[0, 0])
+    node_assembly = nodes.add_custom_node_group_to_node(node_bio, 'MOL_utils_bio_assembly', location=(0, 0))
 
-    node_trans = nodes.add_custom_node_group_to_node(node_bio, data_trans.name, location=[-400, -200])
+    node_trans = nodes.add_custom_node_group_to_node(node_bio, data_trans.name, location=(-400, -200))
 
-    link = node_bio.links.new
+    node_bio.links.new(node_input.outputs['Geometry'], node_assembly.inputs['Geometry'])
+    node_bio.links.new(node_trans.outputs['RotTransMat'], node_assembly.inputs['RotTransMat'])
+    node_bio.links.new(node_assembly.outputs['Instances'], node_output.inputs[0])
 
-    link(node_input.outputs['Geometry'], node_assembly.inputs['Geometry'])
-    link(node_trans.outputs['RotTransMat'], node_assembly.inputs['RotTransMat'])
-    link(node_assembly.outputs['Instances'], node_output.inputs[0])
+    node_bio.inputs.new('NodeSocketFloat', 'Scale Rotation')
+    node_bio.inputs.get('Scale Rotation').default_value = 1
+    node_bio.links.new(node_input.outputs['Scale Rotation'], node_assembly.inputs['Scale Rotation'])
 
-    inputs = (
-        {'name': 'Scale Rotation',
-         'type': 'NodeSocketFloat',
-         'default': 1},
-        {'name': 'Scale Translation',
-         'type': 'NodeSocketFloat',
-         'default': 1}
-    )
-
-    for input_ in inputs:
-        name = input_.get('name')
-        type_ = input_.get('type')
-        default = input_.get('default')
-
-        node_bio.inputs.new(type_, name)
-        node_bio.inputs.get(name).default_value = default
-
-        link(node_input.outputs[name], node_assembly.inputs[name])
+    node_bio.inputs.new('NodeSocketFloat', 'Scale Translation')
+    node_bio.inputs.get('Scale Translation').default_value = 1
+    node_bio.links.new(node_input.outputs['Scale Translation'], node_assembly.inputs['Scale Translation'])
 
     return node_bio

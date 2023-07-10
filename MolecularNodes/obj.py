@@ -1,10 +1,10 @@
 import bpy
-from bpy.types import Mesh, Object, Attribute
+from bpy.types import Mesh, Object, Attribute, Collection
 import numpy as np
 from typing import Optional
 
 
-def create_object(name: str, collection, locations, bonds: Optional[list]) -> Object:
+def create_object(name: str, collection: Collection, locations, bonds: Optional[list]) -> Object:
     """
     Creates a mesh with the given name in the given collection, from the supplied
     values for the locations of vertices, and if supplied, bonds as edges.
@@ -21,8 +21,8 @@ def add_attribute(obj: Object, name: str, data, data_type: str = 'FLOAT', domain
     attribute.data.foreach_set('value', data)
 
 
-def get_attribute(obj: Object, attr_name: str = 'position') -> Optional[np.array]:
-    """Retrieve Attribute from Object as Numpy Array
+def get_attribute(obj: Object, attr_name: str = 'position') -> Optional[np.ndarray]:
+    """ Retrieve Attribute from Object as numpy.ndarray
     """
     att: Attribute = obj.to_mesh().attributes[attr_name]
     try:

@@ -1,58 +1,61 @@
 import bpy
 import os
+import random
 from . import pkg
+from bpy.types import Object, GeometryNodeGroup, GeometryNodeTree
+from scipy.spatial.transform import Rotation
 
 socket_types = {
-        'BOOLEAN'   : 'NodeSocketBool', 
-        'GEOMETRY'  : 'NodeSocketGeometry', 
-        'INT'       : 'NodeSocketInt', 
-        'MATERIAL'  : 'NodeSocketMaterial', 
-        'VECTOR'    : 'NodeSocketVector', 
-        'STRING'    : 'NodeSocketString', 
-        'VALUE'     : 'NodeSocketFloat', 
-        'COLLECTION': 'NodeSocketCollection', 
-        'TEXTURE'   : 'NodeSocketTexture', 
-        'COLOR'     : 'NodeSocketColor', 
-        'IMAGE'     : 'NodeSocketImage'
-    }
+    'BOOLEAN':    'NodeSocketBool',
+    'GEOMETRY':   'NodeSocketGeometry',
+    'INT':        'NodeSocketInt',
+    'MATERIAL':   'NodeSocketMaterial',
+    'VECTOR':     'NodeSocketVector',
+    'STRING':     'NodeSocketString',
+    'VALUE':      'NodeSocketFloat',
+    'COLLECTION': 'NodeSocketCollection',
+    'TEXTURE':    'NodeSocketTexture',
+    'COLOR':      'NodeSocketColor',
+    'IMAGE':      'NodeSocketImage'
+}
 
-def mol_append_node(node_name):
-    node = bpy.data.node_groups.get(node_name)
-    if not node:
-        bpy.ops.wm.append(
-            directory = os.path.join(
-                    pkg.ADDON_DIR, 'assets', 'node_append_file.blend' + r'/NodeTree'), 
-                    filename = node_name, 
-                    link = False
-                )
-    
+
+def activate_molecular_nodes_modifier_on(obj: Object):
+    ''' Either get or create a MolecularNodes modifier on `obj`
+        and make it the object's active modifier.
+    '''
+    # Does this work on multiple objects?
+    # Can we make obj the active Blender object?
+    obj.modifiers.active = obj.modifiers.get("MolecularNodes") \
+        or obj.modifiers.new("MolecularNodes", "NODES")
+    return obj.modifiers.active
+
+
+def mol_append_node(node_name: str):
+    if (node_group := bpy.data.node_groups.get(node_name)) is not None:
+        return node_group
+    bpy.ops.wm.append(
+        directory=os.path.join(pkg.ADDON_DIR, 'assets', 'node_append_file.blend/NodeTree'),
+        filename=node_name, link=False)
     return bpy.data.node_groups[node_name]
 
-def mol_base_material():
+
+def mol_base_material(mat_name: str = 'MOL_atomic_material'):
     """Append MOL_atomic_material to the .blend file it it doesn't already exist, and return that material."""
-    
-    mat_name = 'MOL_atomic_material'
-    mat = bpy.data.materials.get(mat_name)
-    
-    if not mat:
-        bpy.ops.wm.append(
-            directory=os.path.join(
-                pkg.ADDON_DIR, 'assets', 'node_append_file.blend' + r'/Material'
-            ), 
-            filename='MOL_atomic_material', 
-            link=False
-        )
-    
+    if (material := bpy.data.materials.get(mat_name)) is not None:
+        return material
+    bpy.ops.wm.append(
+        directory=os.path.join(pkg.ADDON_DIR, 'assets', 'node_append_file.blend/Material'),
+        filename='MOL_atomic_material', link=False)
     return bpy.data.materials[mat_name]
 
-def gn_new_group_empty(name = "Geometry Nodes"):
-    group = bpy.data.node_groups.get(name)
-    # if the group already exists, return it and don't create a new one
-    if group:
+
+def gn_new_group_empty(name: str = "Geometry Nodes") -> GeometryNodeTree:
+    # If a group by this name already exists, use that
+    if (group := bpy.data.node_groups.get(name)) is not None:
         return group
-    
-    # create a new group for this particular name and do some initial setup
-    group = bpy.data.node_groups.new(name, 'GeometryNodeTree')
+    # Otherwise, create and intialise a new group
+    group: GeometryNodeTree = bpy.data.node_groups.new(name, 'GeometryNodeTree')
     group.inputs.new('NodeSocketGeometry', "Geometry")
     group.outputs.new('NodeSocketGeometry', "Geometry")
     input_node = group.nodes.new('NodeGroupInput')
@@ -65,255 +68,209 @@ def gn_new_group_empty(name = "Geometry Nodes"):
     group.links.new(output_node.inputs[0], input_node.outputs[0])
     return group
 
-def add_custom_node_group(parent_group, node_name, location = [0,0], width = 200):
-    
+
+def add_custom_node_group_to_node(
+    parent_group, node_name: str, location: tuple[float] = (0, 0), width=200
+) -> GeometryNodeGroup:
     mol_append_node(node_name)
-    
-    node = parent_group.node_group.nodes.new('GeometryNodeGroup')
+    node: GeometryNodeGroup = parent_group.nodes.new('GeometryNodeGroup')
     node.node_tree = bpy.data.node_groups[node_name]
-    
-    node.location = location
-    node.width = 200 # unsure if width will work TODO check
-    
+    node.location = tuple(location)
+    node.width = 200  # TODO Check that this works
     return node
 
-def add_custom_node_group_to_node(parent_group, node_name, location = [0,0], width = 200):
-    
-    mol_append_node(node_name)
-    
-    node = parent_group.nodes.new('GeometryNodeGroup')
-    node.node_tree = bpy.data.node_groups[node_name]
-    
-    node.location = location
-    node.width = 200 # unsure if width will work TODO check
-    
-    return node
+
+def add_custom_node_group(parent_group, node_name, location=(0, 0), width=200):
+    return add_custom_node_group_to_node(parent_group.node_group, node_name, location, width)
+
 
 def create_starting_nodes_starfile(obj):
-    # ensure there is a geometry nodes modifier called 'MolecularNodes' that is created and applied to the object
-    node_mod = obj.modifiers.get('MolecularNodes')
-    if not node_mod:
-        node_mod = obj.modifiers.new("MolecularNodes", "NODES")
-    obj.modifiers.active = node_mod
-    
+
+    node_mod = activate_molecular_nodes_modifier_on(obj)
+
     node_name = f"MOL_starfile_{obj.name}"
-    
-    # if node tree already exists by this name, set it and return it
-    node_group = bpy.data.node_groups.get(node_name)
-    if node_group:
+
+    # If there already exists a node tree by this name, use that
+    if (node_group := bpy.data.node_groups.get(node_name)):
         node_mod.node_group = node_group
         return node_group
-    
-    
-    # create a new GN node group, specific to this particular molecule
-    node_group = gn_new_group_empty(node_name)
-    
-    # create a new GN node group, specific to this particular molecule
-    node_group = gn_new_group_empty(node_name)
+
+    # Create a new Geometry Nodes node group for this molecule
+    node_group: GeometryNodeTree = gn_new_group_empty(node_name)
     node_mod.node_group = node_group
     node_group.inputs.new("NodeSocketObject", "Molecule")
     node_group.inputs.new("NodeSocketInt", "Image")
     node_group.inputs["Image"].default_value = 1
     node_group.inputs["Image"].min_value = 1
     node_group.inputs.new("NodeSocketBool", "Simplify")
-    # move the input and output nodes for the group
+    # Move the input and output nodes for the group
     node_input = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Input",)]
-    node_input.location = [0, 0]
+    node_input.location = (0, 0)
     node_output = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
-    node_output.location = [900, 0]
+    node_output.location = (900, 0)
 
     node_delete = node_group.nodes.new("GeometryNodeDeleteGeometry")
-    node_delete.location = [500, 0]
+    node_delete.location = (500, 0)
 
     node_instance = node_group.nodes.new("GeometryNodeInstanceOnPoints")
-    node_instance.location = [675, 0]
+    node_instance.location = (675, 0)
 
     node_get_imageid = node_group.nodes.new("GeometryNodeInputNamedAttribute")
-    node_get_imageid.location = [0, 200]
+    node_get_imageid.location = (0, 200)
     node_get_imageid.inputs['Name'].default_value = "MOLImageId"
     node_get_imageid.data_type = "INT"
 
     node_subtract = node_group.nodes.new("ShaderNodeMath")
-    node_subtract.location = [160, 200]
+    node_subtract.location = (160, 200)
     node_subtract.operation = "SUBTRACT"
     node_subtract.inputs[1].default_value = 1
     node_subtract.inputs[0].default_value = 1
 
-
     node_compare = node_group.nodes.new("FunctionNodeCompare")
-    node_compare.location = [320, 200]
+    node_compare.location = (320, 200)
     node_compare.operation = "NOT_EQUAL"
     node_compare.data_type = "INT"
 
     node_object_info = node_group.nodes.new("GeometryNodeObjectInfo")
-    node_object_info.location = [200, -200]
+    node_object_info.location = (200, -200)
 
     node_get_rotation = node_group.nodes.new("GeometryNodeInputNamedAttribute")
-    node_get_rotation.location = [450, -200]
+    node_get_rotation.location = (450, -200)
     node_get_rotation.inputs['Name'].default_value = "MOLRotation"
     node_get_rotation.data_type = "FLOAT_VECTOR"
 
     node_get_id = node_group.nodes.new("GeometryNodeInputID")
-    node_get_id.location = [0, -200]
+    node_get_id.location = (0, -200)
 
     node_statistics = node_group.nodes.new("GeometryNodeAttributeStatistic")
-    node_statistics.location = [200, -400]
+    node_statistics.location = (200, -400)
 
     node_compare_maxid = node_group.nodes.new("FunctionNodeCompare")
-    node_compare_maxid.location = [400, -400]
+    node_compare_maxid.location = (400, -400)
     node_compare_maxid.operation = "EQUAL"
 
     node_bool_math = node_group.nodes.new("FunctionNodeBooleanMath")
-    node_bool_math.location = [600, -400]
+    node_bool_math.location = (600, -400)
     node_bool_math.operation = "OR"
 
     node_switch = node_group.nodes.new("GeometryNodeSwitch")
-    node_switch.location = [800, -400]
+    node_switch.location = (800, -400)
 
     node_cone = node_group.nodes.new("GeometryNodeMeshCone")
-    node_cone.location = [1000, -400]
+    node_cone.location = (1000, -400)
 
-    link = node_group.links.new
+    node_group.links.new(node_input.outputs[0], node_delete.inputs[0])
+    node_group.links.new(node_delete.outputs[0], node_instance.inputs[0])
+    node_group.links.new(node_instance.outputs[0], node_output.inputs[0])
 
-    link(node_input.outputs[0], node_delete.inputs[0])
-    link(node_delete.outputs[0], node_instance.inputs[0])
-    link(node_instance.outputs[0], node_output.inputs[0])
+    node_group.links.new(node_input.outputs[1], node_object_info.inputs[0])
+    node_group.links.new(node_input.outputs[2], node_subtract.inputs[0])
+    node_group.links.new(node_input.outputs[3], node_bool_math.inputs[0])
 
-    link(node_input.outputs[1], node_object_info.inputs[0])
-    link(node_input.outputs[2], node_subtract.inputs[0])
-    link(node_input.outputs[3], node_bool_math.inputs[0])
-
-    link(node_subtract.outputs[0], node_compare.inputs[2])
-    link(node_get_imageid.outputs[4], node_compare.inputs[3])
-    link(node_compare.outputs[0], node_delete.inputs[1])
-    link(node_statistics.outputs[4], node_compare_maxid.inputs[0])
-    link(node_compare_maxid.outputs[0], node_bool_math.inputs[1])
-    link(node_get_id.outputs[0], node_statistics.inputs[2])
-    link(node_object_info.outputs["Geometry"], node_statistics.inputs[0])
-    link(node_bool_math.outputs[0], node_switch.inputs[1])
-    link(node_object_info.outputs["Geometry"], node_switch.inputs[14])
-    link(node_cone.outputs[0], node_switch.inputs[15])
-    link(node_switch.outputs[6],     node_instance.inputs["Instance"])
-    link(node_get_rotation.outputs[0], node_instance.inputs["Rotation"])
-
+    node_group.links.new(node_subtract.outputs[0], node_compare.inputs[2])
+    node_group.links.new(node_get_imageid.outputs[4], node_compare.inputs[3])
+    node_group.links.new(node_compare.outputs[0], node_delete.inputs[1])
+    node_group.links.new(node_statistics.outputs[4], node_compare_maxid.inputs[0])
+    node_group.links.new(node_compare_maxid.outputs[0], node_bool_math.inputs[1])
+    node_group.links.new(node_get_id.outputs[0], node_statistics.inputs[2])
+    node_group.links.new(node_object_info.outputs["Geometry"], node_statistics.inputs[0])
+    node_group.links.new(node_bool_math.outputs[0], node_switch.inputs[1])
+    node_group.links.new(node_object_info.outputs["Geometry"], node_switch.inputs[14])
+    node_group.links.new(node_cone.outputs[0], node_switch.inputs[15])
+    node_group.links.new(node_switch.outputs[6],     node_instance.inputs["Instance"])
+    node_group.links.new(node_get_rotation.outputs[0], node_instance.inputs["Rotation"])
 
     # Need to manually set Image input to 1, otherwise it will be 0 (even though default is 1)
     node_mod['Input_3'] = 1
 
+
 def create_starting_nodes_density(obj, threshold = 0.8):
-    # ensure there is a geometry nodes modifier called 'MolecularNodes' that is created and applied to the object
-    node_mod = obj.modifiers.get('MolecularNodes')
-    if not node_mod:
-        node_mod = obj.modifiers.new("MolecularNodes", "NODES")
-    obj.modifiers.active = node_mod
+
+    node_mod = activate_molecular_nodes_modifier_on(obj)
+
     node_name = f"MOL_density_{obj.name}"
-    
-    # if node tree already exists by this name, set it and return it
-    node_group = bpy.data.node_groups.get(node_name)
-    if node_group:
+
+    # If there already exists a node tree by this name, use that
+    if (node_group := bpy.data.node_groups.get(node_name)):
         node_mod.node_group = node_group
         return node_group
-    
-    
-    # create a new GN node group, specific to this particular molecule
-    node_group = gn_new_group_empty(node_name)
+
+    # Create a new Geometry Nodes node group for this molecule
+    node_group: GeometryNodeTree = gn_new_group_empty(node_name)
     node_mod.node_group = node_group
-    # move the input and output nodes for the group
+    # Move the input and output nodes for the group
     node_input = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Input",)]
-    node_input.location = [0, 0]
+    node_input.location = (0, 0)
     node_output = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
-    node_output.location = [800, 0]
-    
-    node_density = add_custom_node_group(node_mod, 'MOL_style_density_surface', [400, 0])
+    node_output.location = (800, 0)
+
+    node_density = add_custom_node_group_to_node(node_mod.node_group, 'MOL_style_density_surface', (400, 0))
     node_density.inputs['Material'].default_value = mol_base_material()
     node_density.inputs['Density Threshold'].default_value = threshold
-    
-    
-    link = node_group.links.new
-    link(
-        node_input.outputs[0], 
-        node_density.inputs[0]
-    )
-    link(
-        node_density.outputs[0], 
-        node_output.inputs[0]
-    )
-    
-    
+
+    node_group.links.new(node_input.outputs[0], node_density.inputs[0])
+    node_group.links.new(node_density.outputs[0], node_output.inputs[0])
+
 
 def create_starting_node_tree(obj, coll_frames, starting_style = "atoms"):
-    
-    # ensure there is a geometry nodes modifier called 'MolecularNodes' that is created and applied to the object
-    node_mod = obj.modifiers.get('MolecularNodes')
-    if not node_mod:
-        node_mod = obj.modifiers.new("MolecularNodes", "NODES")
-    obj.modifiers.active = node_mod
-    
-    
+
+    node_mod = activate_molecular_nodes_modifier_on(obj)
+
     name = f"MOL_{obj.name}"
-    # if node group of this name already exists, set that node group
-    # and return it without making any changes
-    node_group = bpy.data.node_groups.get(name)
-    if node_group:
+    # If a node group by this name already exists, use it and make no changes
+    if (node_group := bpy.data.node_groups.get(name)) is not None:
         node_mod.node_group = node_group
         return node_group
-    
-    # create a new GN node group, specific to this particular molecule
-    node_group = gn_new_group_empty(name)
+    # Otherwise, create a new GN node group for this molecule
+    node_group: GeometryNodeTree = gn_new_group_empty(name)
     node_mod.node_group = node_group
-    
-    # move the input and output nodes for the group
+
+    # Move the input and output nodes for the group
     node_input = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Input",)]
-    node_input.location = [0, 0]
+    node_input.location = (0, 0)
     node_output = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
-    node_output.location = [800, 0]
-    
-    # node_properties = add_custom_node_group(node_group, 'MOL_prop_setup', [0, 0])
-    node_colour = add_custom_node_group(node_mod, 'MOL_color_set_common', [200, 0])
-    
+    node_output.location = (800, 0)
+
+    # node_properties = add_custom_node_group_to_node(node_group.node_group, 'MOL_prop_setup', [0, 0])
+    node_colour = add_custom_node_group_to_node(node_mod.node_group, 'MOL_color_set_common', [200, 0])
+
     node_random_colour = node_group.nodes.new("FunctionNodeRandomValue")
     node_random_colour.data_type = 'FLOAT_VECTOR'
-    node_random_colour.location = [-60, -200]
-    
+    node_random_colour.location = (-60, -200)
+
     node_chain_id = node_group.nodes.new("GeometryNodeInputNamedAttribute")
-    node_chain_id.location = [-250, -450]
+    node_chain_id.location = (-250, -450)
     node_chain_id.data_type = "INT"
     node_chain_id.inputs['Name'].default_value = "chain_id"
-    
-    
-    
+
     # create the links between the the nodes that have been established
     link = node_group.links.new
     link(node_input.outputs['Geometry'], node_colour.inputs['Atoms'])
     link(node_colour.outputs['Atoms'], node_output.inputs['Geometry'])
     link(node_random_colour.outputs['Value'], node_colour.inputs['Carbon'])
     link(node_chain_id.outputs[4], node_random_colour.inputs['ID'])
-    
+
     styles = [
-        'MOL_style_atoms_cycles', 
-        'MOL_style_cartoon', 
-        'MOL_style_ribbon_protein', 
-        'MOL_style_ball_and_stick'
-        ]
-    
-    # if starting_style == "atoms":
-    
-    node_style = add_custom_node_group(node_mod, styles[starting_style], location = [500, 0])
+        'MOL_style_atoms_cycles', 'MOL_style_cartoon',
+        'MOL_style_ribbon_protein', 'MOL_style_ball_and_stick',
+    ]
+
+    # BUG list indices must be integers or slices, not str
+    node_style = add_custom_node_group_to_node(node_mod.node_group, styles[starting_style], location=(500, 0))
     link(node_colour.outputs['Atoms'], node_style.inputs['Atoms'])
     link(node_style.outputs[0], node_output.inputs['Geometry'])
     node_style.inputs['Material'].default_value = mol_base_material()
 
-    
-    # if multiple frames, set up the required nodes for an animation
+    # If there are multiple frames, set up the nodes required for an animation
     if coll_frames:
-        node_output.location = [1100, 0]
-        node_style.location = [800, 0]
-        
+        node_output.location = (1100, 0)
+        node_style.location = (800, 0)
+
         node_animate_frames = add_custom_node_group_to_node(node_group, 'MOL_animate_frames', [500, 0])
         node_animate_frames.inputs['Frames'].default_value = coll_frames
-        
+
         # node_animate_frames.inputs['Absolute Frame Position'].default_value = True
-        
+
         node_animate = add_custom_node_group_to_node(node_group, 'MOL_animate_value', [500, -300])
         link(node_colour.outputs['Atoms'], node_animate_frames.inputs['Atoms'])
         link(node_animate_frames.outputs['Atoms'], node_style.inputs['Atoms'])
@@ -321,18 +278,16 @@ def create_starting_node_tree(obj, coll_frames, starting_style = "atoms"):
 
 
 def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
-    # if a group of this name already exists, just return that instead of making a new one
-    group = bpy.data.node_groups.get(name)
-    if group:
+    # If there already exists a group by this name, use that
+    if (group := bpy.data.node_groups.get(name)) is not None:
         return group
-    
-    # get the node to create a loop from
+
+    # Get the node to create a loop from
     looping_node = mol_append_node('MOL_style_surface_single')
-    
-    
-    # create new empty data block
-    group = bpy.data.node_groups.new(name, 'GeometryNodeTree')
-    
+
+    # Create new empty data block
+    group: GeometryNodeTree = bpy.data.node_groups.new(name, 'GeometryNodeTree')
+
     # loop over the inputs and create an input for each
     for i in looping_node.inputs.values():
         group_input = group.inputs.new(socket_types.get(i.type), i.name)
@@ -340,73 +295,72 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
             group_input.default_value = i.default_value
         except AttributeError:
             pass
-    
+
     # loop over the outputs and create an output for each
     for o in looping_node.outputs.values():
         group.outputs.new(socket_types.get(o.type), o.name)
-    
+
     group.outputs.new(socket_types.get('GEOMETRY'), 'Chain Instances')
-    
+
     # add in the inputs and theo outputs inside of the node
     node_input = group.nodes.new('NodeGroupInput')
-    node_input.location = [-300, 0]
+    node_input.location = (-300, 0)
     node_output = group.nodes.new('NodeGroupOutput')
-    node_output.location = [800, 0]
-    
+    node_output.location = (800, 0)
+
     link = group.links.new
-    
+
     node_input = group.nodes[bpy.app.translations.pgettext_data("Group Input",)]
     # node_input.inputs['Geometry'].name = 'Atoms'
     node_output = group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
-    
+
     node_chain_id = group.nodes.new("GeometryNodeInputNamedAttribute")
-    node_chain_id.location = [-250, -450]
+    node_chain_id.location = (-250, -450)
     node_chain_id.data_type = "INT"
     node_chain_id.inputs['Name'].default_value = "chain_id"
-    
-    # for each chain, separate the geometry and choose only that chain, pipe through 
+
+    # for each chain, separate the geometry and choose only that chain, pipe through
     # a surface node and then join it all back together again
     list_node_surface = []
     height_offset = 300
     for chain in range(n_chains):
         offset = 0 - chain * height_offset
         node_separate = group.nodes.new('GeometryNodeSeparateGeometry')
-        node_separate.location = [120, offset]
-        
+        node_separate.location = (120, offset)
+
         node_compare = group.nodes.new('FunctionNodeCompare')
         node_compare.data_type = 'INT'
-        node_compare.location = [-100, offset]
+        node_compare.location = (-100, offset)
         node_compare.operation = 'EQUAL'
-        
+
         link(node_chain_id.outputs[4], node_compare.inputs[2])
         node_compare.inputs[3].default_value = chain
         link(node_compare.outputs['Result'], node_separate.inputs['Selection'])
         link(node_input.outputs[0], node_separate.inputs['Geometry'])
-        
+
         node_surface_single = group.nodes.new('GeometryNodeGroup')
         node_surface_single.node_tree = looping_node
-        node_surface_single.location = [300, offset]
-        
+        node_surface_single.location = (300, offset)
+
         link(node_separate.outputs['Selection'], node_surface_single.inputs['Atoms'])
-        # node_surface_single = add_custom_node_group(group, 'MOL_style_surface_single', [100, offset])
-        
+        # node_surface_single = add_custom_node_group_to_node(group.node_group, 'MOL_style_surface_single', [100, offset])
+
         for i in node_surface_single.inputs.values():
             if i.type != 'GEOMETRY':
                 link(node_input.outputs[i.name], i)
-        
-        
+
         list_node_surface.append(node_surface_single)
-    
+
     # create join geometry, and link the nodes in reverse order
     node_join_geometry = group.nodes.new('GeometryNodeJoinGeometry')
-    node_join_geometry.location = [500, 0]
+    node_join_geometry.location = (500, 0)
 
     node_instance = group.nodes.new('GeometryNodeGeometryToInstance')
-    node_instance.location = [500, -600]
-    
+    node_instance.location = (500, -600)
+
     node_join_volume = group.nodes.new('GeometryNodeJoinGeometry')
-    node_join_volume.location = [500, -300]
-    
+    node_join_volume.location = (500, -300)
+
     # TODO: turn these into instances instead of just joining geometry
     assert merge_kind in ('join_geometry', 'instance', 'join_volume')
     # TODO: Offer the choice of merge_kind to users in GUI
@@ -415,7 +369,7 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
             ('Surface mesh', 'Geometry'), ('Geometry', 'Surface mesh')),
         'instance': (node_instance,
             ('Surface', 'Geometry'), ('Instances', 'Chain Instances')),
-        'join_volume': (node_join_volume,   
+        'join_volume': (node_join_volume,
             ('Volume', 'Geometry'), ('Geometry', 'Volume')),
     }[merge_kind]
 
@@ -425,10 +379,11 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
 
     i, j = link2
     link(merge_node.outputs[i], node_output.inputs[j])
-    
+
     return group
 
-def rotation_matrix(node_group, mat, location = [0,0], world_scale = 0.01):
+
+def rotation_matrix(node_group, mat, location: tuple[float] = (0, 0), world_scale: float = 0.01) -> GeometryNodeGroup:
     """Add a Rotation & Translation node from a 3x4 matrix.
 
     Args:
@@ -439,104 +394,81 @@ def rotation_matrix(node_group, mat, location = [0,0], world_scale = 0.01):
     Returns:
         _type_: Newly created node tree.
     """
-    from scipy.spatial.transform import Rotation as R
-    
-    node_utils_rot = mol_append_node('MOL_utils_rot_trans')
-    
     node = node_group.nodes.new('GeometryNodeGroup')
-    node.node_tree = node_utils_rot
+    node.node_tree = mol_append_node('MOL_utils_rot_trans')
     node.location = location
-    
-    # calculate the euler rotation from the rotation matrix
-    rotation = R.from_matrix(mat[:3, :3]).as_euler('xyz')
-    
-    # set the values for the node that was just created
-    # set the euler rotation values
-    for i in range(3):
-        node.inputs[0].default_value[i] = rotation[i]
-    # set the translation values
-    for i in range(3):
-        node.inputs[1].default_value[i] = mat[:3, 3:][i] * world_scale
-        
+    # Calculate Euler angles from rotation matrix
+    rotation = Rotation.from_matrix(mat[:3, :3]).as_euler('xyz')
+    # Set values for new node
+    node.inputs[0].default_value[:3] = rotation[:3]  # Set rotation
+    node.inputs[1].default_value[:3] = mat[:3, 3:][:3] * world_scale  # Set translation
     return node
 
-def chain_selection(node_name, input_list, attribute, starting_value = 0, label_prefix = ""):
+
+def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0, format=lambda s: s):
     """
-    Given a an input_list, will create a node which takes an Integer input, 
-    and has a boolean tick box for each item in the input list. The outputs will
-    be the resulting selection and the inversion of the selection.
-    Can contain a prefix for the resulting labels. Mostly used for constructing 
-    chain selections when required for specific proteins.
+    Given a list of chain names, will create a node which takes an Integer input,
+    and has a boolean tick box for each item in the input list.
+    Returns the resulting selection and the inversion of the selection.
+    Will format the resulting labels using `format` (by default, just the chain name).
+    Use to construct chain selections for specific proteins.
     """
-    # just reutn the group name early if it already exists
-    group = bpy.data.node_groups.get(node_name)
-    if group:
+    # If the group already exists, just return it
+    if (group := bpy.data.node_groups.get(node_name)) is not None:
         return group
-    
-    # get the active object, might need to change to taking an object as an input
-    # and making it active isntead, to be more readily applied to multiple objects
-    obj = bpy.context.active_object
-    # try to get the Molecular Nodes modifier and select it, if not create one and select it
-    node_mod = obj.modifiers.get('MolecularNodes')
-    if not node_mod:
-        node_mod = obj.modifiers.new("MolecularNodes", "NODES")
-    
-    obj.modifiers.active = node_mod
-    
-    
-    # link shortcut for creating links between nodes
-    link = node_mod.node_group.links.new
-    # create the custom node group data block, where everything will go
-    # also create the required group node input and position it
+
+    activate_molecular_nodes_modifier_on(bpy.context.active_object)
+
+    # The custom node group data block, where everything will go
     chain_group = bpy.data.node_groups.new(node_name, "GeometryNodeTree")
+    # The required group node input
     chain_group_in = chain_group.nodes.new("NodeGroupInput")
-    chain_group_in.location = [-200, 0]
-    # create a named attribute node that gets the chain_number attribute
-    # and use this for the selection algebra that happens later on
+    chain_group_in.location = (-200, 0)
+    # A named attribute node that gets the chain_number attribute
+    # and is used for the later selection algebra
     chain_number_node = chain_group.nodes.new("GeometryNodeInputNamedAttribute")
     chain_number_node.data_type = 'INT'
-    chain_number_node.location = [-200, 200]
+    chain_number_node.location = (-200, 200)
     chain_number_node.inputs[0].default_value = attribute
     chain_number_node.outputs.get('Attribute')
-    # create a boolean input for the group for each item in the list
-    for chain_name in input_list: 
-        # create a boolean input for the name, and name it whatever the chain chain name is
-        chain_group.inputs.new("NodeSocketBool", str(label_prefix) + str(chain_name))
-    # shortcut for creating new nodes
-    new_node = chain_group.nodes.new
-    # distance horizontally to space all of the created nodes
-    node_sep_dis = 180
-    counter = 0
-    for chain_name in input_list:
+    # Create a boolean input for the group for each item in the list
+    for chain_name in chain_names:
+        # Create a boolean input for the name, and name it after the chain
+        chain_group.inputs.new("NodeSocketBool", format(str(chain_name)))
+    node_sep_dis = 180  # Horizontal distance between nodes
+    i: int = 0
+    for chain_name in chain_names:
         current_node = chain_group.nodes.new("GeometryNodeGroup")
         current_node.node_tree = mol_append_node('MOL_utils_bool_chain')
-        current_node.location = [counter * node_sep_dis, 200]
-        current_node.inputs["number_matched"].default_value = counter + starting_value
+        current_node.location = (i * node_sep_dis, 200)
+        current_node.inputs["number_matched"].default_value = i + start
         group_link = chain_group.links.new
         # link from the the named attribute node chain_number into the other inputs
-        if counter == 0:
+        if i == 0:
             # for some reason, you can't link with the first output of the named attribute node. Might
-            # be a bug, which might be changed later, so I am just going through a range of numbers for 
-            # the named attribute node outputs, to link whatever it ends up being. Dodgy I know. 
+            # be a bug, which might be changed later, so I am just going through a range of numbers for
+            # the named attribute node outputs, to link whatever it ends up being. Dodgy I know.
             # TODO revisit this and see if it is fixed and clean up code
-            for i in range(5):
+            for j in range(5):
                 try:
-                    group_link(chain_number_node.outputs[i], current_node.inputs['number_chain_in'])
-                except:
-                    pass
-        group_link(chain_group_in.outputs[counter], current_node.inputs["bool_include"])
-        if counter > 0:
+                    group_link(chain_number_node.outputs[j], current_node.inputs['number_chain_in'])
+                except:  # What kinds of exception are expected?
+                    continue
+        group_link(chain_group_in.outputs[i], current_node.inputs["bool_include"])
+        if i > 0:
             group_link(previous_node.outputs['number_chain_out'], current_node.inputs['number_chain_in'])
             group_link(previous_node.outputs['bool_chain_out'], current_node.inputs['bool_chain_in'])
         previous_node = current_node
-        counter += 1
+        i += 1
+
     chain_group_out = chain_group.nodes.new("NodeGroupOutput")
-    chain_group_out.location = [(counter + 1) * node_sep_dis, 200]
+    chain_group_out.location = ((i + 1) * node_sep_dis, 200)
     chain_group.outputs.new("NodeSocketBool", "Selection")
     chain_group.outputs.new("NodeSocketBool", "Inverted")
     group_link(current_node.outputs['bool_chain_out'], chain_group_out.inputs['Selection'])
+
     bool_math = chain_group.nodes.new("FunctionNodeBooleanMath")
-    bool_math.location = [counter * node_sep_dis, 50]
+    bool_math.location = (i * node_sep_dis, 50)
     bool_math.operation = "NOT"
     group_link(current_node.outputs['bool_chain_out'], bool_math.inputs[0])
     group_link(bool_math.outputs[0], chain_group_out.inputs['Inverted'])
@@ -550,197 +482,156 @@ def chain_selection(node_name, input_list, attribute, starting_value = 0, label_
     # these are custom properties that are associated with the object when it is initial created
     return chain_group
 
-def chain_color(node_name, input_list, label_prefix = "Chain "):
+
+def chain_color(node_name, input_list, label_prefix: str = "Chain "):
     """
     Given the input list of chain names, will create a node group which uses
     the chain_id named attribute to manually set the colours for each of the chains.
     """
-    
-    import random
-    
-    # get the active object, might need to change to taking an object as an input
-    # and making it active isntead, to be more readily applied to multiple objects
-    obj = bpy.context.active_object
-    # try to get the Molecular Nodes modifier and select it, if not create one and select it
-    node_mod = obj.modifiers.get('MolecularNodes')
-    if not node_mod:
-        node_mod = obj.modifiers.new("MolecularNodes", "NODES")
-    
-    obj.modifiers.active = node_mod
-    
-    
-    # create the custom node group data block, where everything will go
-    # also create the required group node input and position it
+    activate_molecular_nodes_modifier_on(bpy.context.active_object)
+
+    # The custom node group data block, where everything will go
     chain_group = bpy.data.node_groups.new(node_name, "GeometryNodeTree")
+    # The required group node input
     node_input = chain_group.nodes.new("NodeGroupInput")
-    node_input.location = [-200, 0]
-    
-    
-    # link shortcut for creating links between nodes
-    link = chain_group.links.new
-    
-    
-    # create a named attribute node that gets the chain_number attribute
-    # and use this for the selection algebra that happens later on
+    node_input.location = (-200, 0)
+
+    # A named attribute node that gets the chain_number attribute
+    # and is used for the later selection algebra
     chain_number_node = chain_group.nodes.new("GeometryNodeInputNamedAttribute")
     chain_number_node.data_type = 'INT'
-    chain_number_node.location = [-200, 400]
+    chain_number_node.location = (-200, 400)
     chain_number_node.inputs[0].default_value = 'chain_id'
     chain_number_node.outputs.get('Attribute')
-    
-    # shortcut for creating new nodes
-    new_node = chain_group.nodes.new
-    # distance horizontally to space all of the created nodes
-    node_sep_dis = 180
-    counter = 0
-    
+
+    node_sep_dis = 180  # Horizontal distance between nodes
+    counter: int = 0
     for chain_name in input_list:
         offset = counter * node_sep_dis
         current_chain = str(label_prefix) + str(chain_name)
-         # node compare inputs 2 & 3
-        node_compare = new_node('FunctionNodeCompare')
+        # Node compare inputs 2 & 3
+        node_compare = chain_group.nodes.new('FunctionNodeCompare')
         node_compare.data_type = 'INT'
-        node_compare.location = [offset, 100]
+        node_compare.location = (offset, 100)
         node_compare.operation = 'EQUAL'
-        
+
         node_compare.inputs[3].default_value = counter
-        
-        # link the named attribute to the compare
-        link(chain_number_node.outputs[4], node_compare.inputs[2])
-        
-        node_color = new_node('GeometryNodeSwitch')
+
+        # Link the named attribute to the compare
+        chain_group.links.new(chain_number_node.outputs[4], node_compare.inputs[2])
+
+        node_color = chain_group.nodes.new('GeometryNodeSwitch')
         node_color.input_type = 'RGBA'
-        node_color.location = [offset, -100]
-        
-        # create an input for this chain
+        node_color.location = (offset, -100)
+
+        # Create an input for this chain
         chain_group.inputs.new("NodeSocketColor", current_chain)
         chain_group.inputs[current_chain].default_value = [random.random(), random.random(), random.random(), 1]
-        # switch input colours 10 and 11
-        link(node_input.outputs[current_chain], node_color.inputs[11])
-        link(node_compare.outputs['Result'], node_color.inputs['Switch'])
-        
-        
+        # Switch input colours 10 and 11
+        chain_group.links.new(node_input.outputs[current_chain], node_color.inputs[11])
+        chain_group.links.new(node_compare.outputs['Result'], node_color.inputs['Switch'])
+
         if counter > 0:
-            link(node_color_previous.outputs[4], node_color.inputs[10])
-        
+            chain_group.links.new(node_color_previous.outputs[4], node_color.inputs[10])
+
         node_color_previous = node_color
         counter += 1
+
     chain_group.outputs.new("NodeSocketColor", "Color")
     node_output = chain_group.nodes.new("NodeGroupOutput")
-    node_output.location = [offset, 200]
-    link(node_color.outputs[4], node_output.inputs['Color'])
-    
+    node_output.location = (offset, 200)
+    chain_group.links.new(node_color.outputs[4], node_output.inputs['Color'])
     return chain_group
 
-def resid_multiple_selection(node_name, input_resid_string):
+
+def resid_multiple_selection(node_name: str, input_resid_string: str):
     """
-    Returns a node group that takes an integer input and creates a boolean 
-    tick box for each item in the input list. Outputs are the selected 
-    residues and the inverse selection. Used for constructing chain 
+    Returns a node group that takes an integer input and creates a boolean
+    tick box for each item in the input list. Outputs are the selected
+    residues and the inverse selection. Used for constructing chain
     selections in specific proteins.
     """
-        
-    #print(f'recieved input: {input_resid_string}')
-    # do a cleanning of input string to allow fuzzy input from users
+    # Preprocess input_resid_string to allow fuzzy matching
     for c in ";/+ .":
         if c in input_resid_string:
-            input_resid_string=input_resid_string.replace(c, ',')
-
+            input_resid_string = input_resid_string.replace(c, ',')
     for c in "_=:":
         if c in input_resid_string:
-            input_resid_string=input_resid_string.replace(c, '-')
+            input_resid_string = input_resid_string.replace(c, '-')
 
-    #print(f'fixed input:{input_resid_string}')
+    # Parse input_resid_string into sub selecting string list
+    sub_list = list(filter(bool, input_resid_string.split(',')))
 
-    # parse input_resid_string into sub selecting string list
-    sub_list=[item for item in input_resid_string.split(',') if item]
-    
-    # distance vertical to space all of the created nodes
-    node_sep_dis = -100
+    node_sep_dis = -100  # Vertical distance between nodes
 
-    # get the active object, might need to change to taking an object as an input
-    # and making it active isntead, to be more readily applied to multiple objects
-    obj = bpy.context.active_object
-    # try to get the Molecular Nodes modifier and select it, if not create one and select it
-    node_mod = obj.modifiers.get('MolecularNodes')
-    if not node_mod:
-        node_mod = obj.modifiers.new("MolecularNodes", "NODES")
-    
-    obj.modifiers.active = node_mod
-    
-    # create the custom node group data block, where everything will go
-    # also create the required group node input and position it
+    activate_molecular_nodes_modifier_on(bpy.context.active_object)
+
+    # Custom node group data block, where everything will go
     residue_id_group = bpy.data.node_groups.new(node_name, "GeometryNodeTree")
+    # Required group node input
     residue_id_group_in = residue_id_group.nodes.new("NodeGroupInput")
-    residue_id_group_in.location = [0, node_sep_dis * len(sub_list)/2]
-    
-    group_link = residue_id_group.links.new
-    new_node = residue_id_group.nodes.new
-    
-    for residue_id_index,residue_id in enumerate(sub_list):
-        
+    residue_id_group_in.location = (0, node_sep_dis * len(sub_list) / 2)
+
+    for residue_id_index, residue_id in enumerate(sub_list):
+
         if '-' in residue_id:
             [resid_start, resid_end] = residue_id.split('-')[:2]
             # set two new inputs
-            residue_id_group.inputs.new("NodeSocketInt",'res_id_start').default_value = int(resid_start)
-            residue_id_group.inputs.new("NodeSocketInt",'res_id_end').default_value = int(resid_end)
+            residue_id_group.inputs.new("NodeSocketInt", 'res_id_start').default_value = int(resid_start)
+            residue_id_group.inputs.new("NodeSocketInt", 'res_id_end').default_value = int(resid_end)
         else:
             # set a new input and set the resid
-            residue_id_group.inputs.new("NodeSocketInt",'res_id').default_value = int(residue_id)
-        
-    # set a counter for MOL_sel_res_id* nodes
-    counter=0
-    for residue_id_index,residue_id in enumerate(sub_list):
-        
-        # add an new node of MOL_sel_res_id or MOL_sek_res_id_range
-        current_node = new_node("GeometryNodeGroup")
+            residue_id_group.inputs.new("NodeSocketInt", 'res_id').default_value = int(residue_id)
 
-        # add an bool_math block 
-        bool_math = new_node("FunctionNodeBooleanMath")
-        bool_math.location = [400,(residue_id_index+1) * node_sep_dis]
+    counter: int = 0  # A counter for MOL_sel_res_id* nodes
+    for residue_id_index, residue_id in enumerate(sub_list):
+
+        # Add a new node of MOL_sel_res_id or MOL_sek_res_id_range
+        current_node = residue_id_group.nodes.new("GeometryNodeGroup")
+
+        # Add a bool_math block
+        bool_math = residue_id_group.nodes.new("FunctionNodeBooleanMath")
+        bool_math.location = (400, residue_id_index * node_sep_dis + node_sep_dis)
         bool_math.operation = "OR"
 
         if '-' in residue_id:
-            # a residue range
+            # A residue range
             current_node.node_tree = mol_append_node('MOL_sel_res_id_range')
-            
-            group_link(residue_id_group_in.outputs[counter], current_node.inputs[0])
-            counter+=1
-            
-            group_link(residue_id_group_in.outputs[counter], current_node.inputs[1])
-            
+            residue_id_group.links.new(residue_id_group_in.outputs[counter], current_node.inputs[0])
+            counter += 1
+            residue_id_group.links.new(residue_id_group_in.outputs[counter], current_node.inputs[1])
+
         else:
-            # create a node
+            # Create a node
             current_node.node_tree = mol_append_node('MOL_sel_res_id')
-            # link the input of MOL_sel_res_id
-            #print(f'counter={counter} of {residue_id}')
-            group_link(residue_id_group_in.outputs[counter], current_node.inputs[0])
-        
-        counter+=1
-        
-        # set the coordinates
-        current_node.location = [200,(residue_id_index+1) * node_sep_dis]
-    
+            # Link the input of MOL_sel_res_id
+            residue_id_group.links.new(residue_id_group_in.outputs[counter], current_node.inputs[0])
+
+        counter += 1
+
+        # Set the coordinates
+        current_node.location = (200, residue_id_index * node_sep_dis + node_sep_dis)
+
         if residue_id_index == 0:
             # link the first residue selection to the first input of its OR block
-            group_link(current_node.outputs['Selection'],bool_math.inputs[0])
+            residue_id_group.links.new(current_node.outputs['Selection'],bool_math.inputs[0])
         else:
             # if it is not the first residue selection, link the output to the previous or block
-            group_link(current_node.outputs['Selection'], previous_bool_node.inputs[1])
-        
+            residue_id_group.links.new(current_node.outputs['Selection'], previous_bool_node.inputs[1])
             # link the ouput of previous OR block to the current OR block
-            group_link(previous_bool_node.outputs[0], bool_math.inputs[0])
+            residue_id_group.links.new(previous_bool_node.outputs[0], bool_math.inputs[0])
+
         previous_bool_node = bool_math
 
-    # add a output block
-    residue_id_group_out = new_node("NodeGroupOutput")
-    residue_id_group_out.location = [800,(residue_id_index + 1) / 2 * node_sep_dis]
+    # Add output block
+    residue_id_group_out = residue_id_group.nodes.new("NodeGroupOutput")
+    residue_id_group_out.location = (800, (residue_id_index + 1) / 2 * node_sep_dis)
     residue_id_group.outputs.new("NodeSocketBool", "Selection")
     residue_id_group.outputs.new("NodeSocketBool", "Inverted")
-    group_link(previous_bool_node.outputs[0], residue_id_group_out.inputs['Selection'])
-    invert_bool_math = new_node("FunctionNodeBooleanMath")
-    invert_bool_math.location = [600,(residue_id_index+1)/ 3 * 2 * node_sep_dis]
+    residue_id_group.links.new(previous_bool_node.outputs[0], residue_id_group_out.inputs['Selection'])
+    invert_bool_math = residue_id_group.nodes.new("FunctionNodeBooleanMath")
+    invert_bool_math.location = (600, (residue_id_index + 1) / 3 * 2 * node_sep_dis)
     invert_bool_math.operation = "NOT"
-    group_link(previous_bool_node.outputs[0], invert_bool_math.inputs[0])
-    group_link(invert_bool_math.outputs[0], residue_id_group_out.inputs['Inverted'])
+    residue_id_group.links.new(previous_bool_node.outputs[0], invert_bool_math.inputs[0])
+    residue_id_group.links.new(invert_bool_math.outputs[0], residue_id_group_out.inputs['Inverted'])
     return residue_id_group

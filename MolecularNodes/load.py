@@ -314,22 +314,20 @@ def att_is_backbone(mol_array: MolecularArray):
         'O1P', 'OP1', 'O2P', 'OP2',                  # alternative names for phosphate O's
         'O4\'', 'C1\'', 'C2\'', 'O2\''               # remaining ribose atoms
     ]
-    return np.logical_and(
-        np.isin(mol_array.atom_name, backbone_atom_names),
-        np.logical_not(struc.filter_solvent(mol_array))
-    )
+    return np.isin(mol_array.atom_name, backbone_atom_names) \
+        & ~struc.filter_solvent(mol_array)
 
 def att_is_nucleic(mol_array: MolecularArray):
     return struc.filter_nucleotides(mol_array)
 
-def att_is_peptide(mol_array: MolecularArray):
+def att_is_peptide(mol_array: MolecularArray) -> np.ndarray[bool]:
     return struc.filter_amino_acids(mol_array) \
         | struc.filter_canonical_amino_acids(mol_array)
 
 def att_is_hetero(mol_array: MolecularArray):
     return mol_array.hetero
 
-def att_is_carb(mol_array: MolecularArray):
+def att_is_carb(mol_array: MolecularArray) -> np.ndarray[bool]:
     return struc.filter_carbohydrates(mol_array)
 
 def att_sec_struct(mol_array: MolecularArray, file, calculate_ss):
@@ -428,11 +426,13 @@ def create_molecule(
         except:
             warnings.warn(f"Unable to add attribute: {att['name']}")
 
-    if mol_frames:
+    if not mol_frames:
+        coll_frames = None
+    else:
         try:
             b_factors = list(pdb_get_b_factors(file))
         except:
-            b_factors = None
+            b_factors = []
 
         coll_frames = coll.frames(mol_object.name)
 
@@ -446,12 +446,10 @@ def create_molecule(
                 try:
                     obj.add_attribute(obj_frame, 'b_factor', b_factors[i])
                 except:
-                    b_factors = False
+                    b_factors.clear()
 
         # disable the frames collection so it is not seen
         bpy.context.view_layer.layer_collection.children[collection.name].children[coll_frames.name].exclude = True
-    else:
-        coll_frames = None
 
     # add custom properties to the actual blender object, such as number of chains, biological assemblies etc
     # currently biological assemblies can be problematic to holding off on doing that

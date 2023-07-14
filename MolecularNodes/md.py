@@ -12,6 +12,7 @@ import MDAnalysis as mda
 import data
 import coll
 import obj
+from obj import AttributeGetter
 import nodes
 from load import att_atomic_number
 
@@ -107,32 +108,33 @@ def get_bonds(univ, selection: str) -> np.ndarray:
     return np.array(reindexed_bonds)
 
 
+@AttributeGetter.from_function(name='vdw_radii', data_type='FLOAT')
 def att_vdw_radii(univ, elements, world_scale: float):
     try:
         vdw_radii = np.array([mda.topology.tables.vdwradii.get(x, 1)
-                                for x in np.char.upper(elements)])
+                              for x in np.char.upper(elements)])
     except:
         # if fail to get radii, just return radii of 1 for everything as a backup
         vdw_radii = np.ones(len(univ.atoms.names))
         warnings.warn("Unable to extract VDW Radii. Defaulting to 1 for all points.")
     return vdw_radii * world_scale
 
-
+@AttributeGetter.from_function(name='res_id', data_type='INT')
 def att_res_id(univ):
     return univ.atoms.resnums
 
-
+@AttributeGetter.from_function(name='res_name', data_type='INT')
 def att_res_name(univ):
     res_names =  np.array([x[:3] for x in univ.atoms.resnames])
     return np.array([
         data.residues[x]['res_name_num'] if x in data.residues else 0
         for x in res_names])
 
-
+@AttributeGetter.from_function(name='b_factor', data_type='FLOAT')
 def att_b_factor(univ):
     return univ.atoms.tempfactors
 
-
+@AttributeGetter.from_function(name='chain_id', data_type='INT')
 def att_chain_id(univ, mol_object):
     chain_id = univ.atoms.chainIDs
     chain_id_unique = np.unique(chain_id)
@@ -141,31 +143,31 @@ def att_chain_id(univ, mol_object):
     return chain_id_num
 
 
-def bool_selection(univ, selection):
+def bool_selection(univ, selection) -> np.ndarray[bool]:
     # For each atom, is it in the selection?
     return np.isin(univ.atoms.ix, univ.select_atoms(selection).ix).astype(bool)
 
-
+@AttributeGetter.from_function(name='is_backbone', data_type='BOOLEAN')
 def att_is_backbone(univ):
     return bool_selection(univ, "backbone or nucleicbackbone")
 
-
+AttributeGetter.from_function(name='is_alpha_carbon', data_type='BOOLEAN')
 def att_is_alpha_carbon(univ):
     return bool_selection(univ, 'name CA')
 
-
+@AttributeGetter.from_function(name='is_solvent', data_type='BOOLEAN')
 def att_is_solvent(univ):
     return bool_selection(univ, 'name OW or name HW1 or name HW2')
 
-
+AttributeGetter.from_function(name='atom_types', data_type='INT')
 def att_atom_type(univ):
     return np.array(univ.atoms.types, dtype=int)
 
-
+@AttributeGetter.from_function(name='is_nucleic', data_type='BOOLEAN')
 def att_is_nucleic(univ):
     return bool_selection(univ, 'nucleic')
 
-
+@AttributeGetter.from_function(name='is_peptide', data_type='BOOLEAN')
 def att_is_peptide(univ):
     return bool_selection(univ, 'protein')
 
@@ -256,30 +258,29 @@ def load_trajectory(
     # and the warning is reported there rather than setting up a try: except: for each individual attribute
     # which makes some really messy code.
 
-    attributes = (
-        {'name': 'atomic_number',   'value': lambda: att_atomic_number(elements),                'type': 'INT',     'domain': 'POINT'},
-        {'name': 'vdw_radii',       'value': lambda: att_vdw_radii(univ, elements, world_scale), 'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'res_id',          'value': lambda: att_res_id(univ),                           'type': 'INT',     'domain': 'POINT'},
-        {'name': 'res_name',        'value': lambda: att_res_name(univ),                         'type': 'INT',     'domain': 'POINT'},
-        {'name': 'b_factor',        'value': lambda: att_b_factor(univ),                         'type': 'float',   'domain': 'POINT'},
-        {'name': 'chain_id',        'value': lambda: att_chain_id(univ, mol_object),             'type': 'INT',     'domain': 'POINT'},
-        {'name': 'atom_types',      'value': lambda: att_atom_type(univ),                        'type': 'INT',     'domain': 'POINT'},
-        {'name': 'is_backbone',     'value': lambda: att_is_backbone(univ),                      'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_alpha_carbon', 'value': lambda: att_is_alpha_carbon(univ),                  'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_solvent',      'value': lambda: att_is_solvent(univ),                       'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_nucleic',      'value': lambda: att_is_nucleic(univ),                       'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_peptide',      'value': lambda: att_is_peptide(univ),                       'type': 'BOOLEAN', 'domain': 'POINT'},
-    )
+    getters = {
+        att_atomic_number:   (elements,),
+        att_vdw_radii:       (univ, elements, world_scale),
+        att_res_id:          (univ,),
+        att_res_name:        (univ,),
+        att_b_factor:        (univ,),
+        att_chain_id:        (univ, mol_object),
+        att_atom_type:       (univ,),
+        att_is_backbone:     (univ,),
+        att_is_alpha_carbon: (univ,),
+        att_is_solvent:      (univ,),
+        att_is_nucleic:      (univ,),
+        att_is_peptide:      (univ,),
+    }
 
-    for att in attributes:
-        # tries to add the attribute to the mesh by calling the 'value' function
-        # which returns the required values to be added to the domain.
+    for getter, args in getters.items():
+        # Try to add the attribute to the mesh
         try:
-            obj.add_attribute(mol_object, att['name'], att['value'](), att['type'], att['domain'])
+            obj.add_attribute(mol_object, getter.name, getter(*args), getter.data_type, getter.domain)
         except:
-            warnings.warn(f"Unable to add attribute: {att['name']}.")
+            warnings.warn(f"Unable to add attribute: {getter}.")
 
-    # add the custom selections if they exist
+    # Add custom selections if any exist
     if custom_selections:
         for sel in custom_selections:
             try:
@@ -317,12 +318,7 @@ def load_trajectory(
 
 #### UI
 
-def bpy_register(cls: type) -> type:
-    bpy.utils.register_class(cls)
-    return cls
-
-
-@bpy_register  # Otherwise the PropertyGroup registration fails
+@(lambda cls: bpy.utils.register_class(cls) or cls)  # Otherwise the PropertyGroup registration fails
 class TrajectorySelectionItem(bpy.types.PropertyGroup):
     """Group of properties for custom selections for MDAnalysis import."""
     bl_idname = "testing"

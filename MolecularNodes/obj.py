@@ -31,3 +31,24 @@ def get_attribute(obj: Object, attr_name: str = 'position') -> Optional[np.ndarr
     except KeyError:
         if att.data_type == 'FLOAT_VECTOR':
             return np.array([x.vector for x in att.data.values()])
+
+
+class AttributeGetter:
+    ''' A function with associated `name`, `data_type`, and `domain`.
+    '''
+
+    def __init__(self, name: str, get, data_type: str, domain: str = 'POINT'):
+        self.name = name
+        self.get = get
+        self.data_type = data_type
+        self.domain = domain
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __call__(self, *args, **kwargs):
+        return self.get(*args, **kwargs)
+
+    @classmethod
+    def from_function(cls, name, data_type, domain):
+        return lambda f: AttributeGetter(name, f, data_type, domain)  # Use this as decoration

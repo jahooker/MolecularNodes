@@ -7,6 +7,9 @@ from . import data
 from . import assembly
 from . import nodes
 from . import obj
+from obj import AttributeGetter
+from bpy.types import Object
+
 import biotite.structure.io.mmtf as mmtf
 import biotite.database.rcsb as rcsb
 import biotite.structure as struc
@@ -230,16 +233,18 @@ def comp_secondary_structure(mol_array: MolecularArray):
 
 MolecularArray: type = struc.AtomArray | struc.AtomArrayStack
 
+@AttributeGetter.from_function(name='atomic_number', data_type='INT')
 def att_atomic_number(elements: np.ndarray[str]):
     return np.array([
         data.elements[symbol]['atomic_number'] if symbol in data.elements else -1
-        for symbol in np.char.title(elements)
-    ])
+        for symbol in np.char.title(elements)])
 
+@AttributeGetter.from_function(name='res_id', data_type='INT')
 def att_res_id(mol_array: MolecularArray):
     return mol_array.res_id
 
-def att_res_name(mol_array: MolecularArray, mol_object):
+@AttributeGetter.from_function(name='res_name', data_type='INT')
+def att_res_name(mol_array: MolecularArray, mol_object: Object):
     id_counter = -1
     res_names = mol_array.res_name
     res_ids = mol_array.res_id
@@ -263,43 +268,48 @@ def att_res_name(mol_array: MolecularArray, mol_object):
     mol_object['ligands'] = np.unique(other_res)
     return np.array(res_nums)
 
-
+@AttributeGetter.from_function(name='chain_id', data_type='INT')
 def att_chain_id(mol_array: MolecularArray):
     return np.searchsorted(np.unique(mol_array.chain_id), mol_array.chain_id)
 
+@AttributeGetter.from_function(name='b_factor', data_type='FLOAT')
 def att_b_factor(mol_array: MolecularArray):
     return mol_array.b_factor
 
+@AttributeGetter.from_function(name='vdw_radii', data_type='FLOAT')
 def att_vdw_radii(mol_array: MolecularArray, world_scale):
     return world_scale * np.array([
         # All coordinates are in Angstroms, so divide by 100 to convert from picometers.
         data.elements[symbol]['vdw_radii'] / 100 if symbol in data.elements else 1,
-        for symbol in np.char.title(mol_array.element)
-    ])
+        for symbol in np.char.title(mol_array.element)])
 
+@AttributeGetter.from_function(name='atom_name', data_type='INT')
 def att_atom_name(mol_array: MolecularArray):
     return np.array([data.atom_names.get(x, 9999) for x in mol_array.atom_name])
 
+@AttributeGetter.from_function(name='lipophobicity', data_type='FLOAT')
 def att_lipophobicity(mol_array: MolecularArray):
     return np.array([
-        data.lipophobicity[x][y] if x in data.lipophobicity
-        and y in data.lipophobicity[x] else 0
-        for x, y in zip(mol_array.res_name, mol_array.atom_name)
-    ])
+        data.lipophobicity[x][y]
+        if x in data.lipophobicity and y in data.lipophobicity[x] else 0
+        for x, y in zip(mol_array.res_name, mol_array.atom_name)])
 
+@AttributeGetter.from_function(name='charge', data_type='FLOAT')
 def att_charge(mol_array: MolecularArray):
     return np.array([
-        data.atom_charge[x][y] if x in data.atom_charge
-        and y in data.atom_charge[x] else 0
-        for x, y in zip(mol_array.res_name, mol_array.atom_name)
-    ])
+        data.atom_charge[x][y]
+        if x in data.atom_charge and y in data.atom_charge[x] else 0
+        for x, y in zip(mol_array.res_name, mol_array.atom_name)])
 
+@AttributeGetter.from_function(name='is_alpha_carbon', data_type='BOOLEAN')
 def att_is_alpha(mol_array: MolecularArray):
     return np.isin(mol_array.atom_name, 'CA')
 
+@AttributeGetter.from_function(name='is_solvent', data_type='BOOLEAN')
 def att_is_solvent(mol_array: MolecularArray):
     return struc.filter_solvent(mol_array)
 
+@AttributeGetter.from_function(name='is_backbone', data_type='BOOLEAN')
 def att_is_backbone(mol_array: MolecularArray):
     """
     Get the atoms that appear in peptide backbone or nucleic acid phosphate backbones.
@@ -309,27 +319,32 @@ def att_is_backbone(mol_array: MolecularArray):
     and the other phosphate oxygens.
     """
     backbone_atom_names = [
-        'N', 'C', 'CA', 'O',                         # peptide backbone atoms
-        'P', 'O5\'', 'C5\'', 'C4\'', 'C3\'', 'O3\'', # 'continuous' nucleic backbone atoms
-        'O1P', 'OP1', 'O2P', 'OP2',                  # alternative names for phosphate O's
-        'O4\'', 'C1\'', 'C2\'', 'O2\''               # remaining ribose atoms
+        'N', 'C', 'CA', 'O',                          # peptide backbone atoms
+        'P', 'O5\'', 'C5\'', 'C4\'', 'C3\'', 'O3\'',  # 'continuous' nucleic backbone atoms
+        'O1P', 'OP1', 'O2P', 'OP2',                   # alternative names for phosphate O's
+        'O4\'', 'C1\'', 'C2\'', 'O2\''                # remaining ribose atoms
     ]
     return np.isin(mol_array.atom_name, backbone_atom_names) \
         & ~struc.filter_solvent(mol_array)
 
+@AttributeGetter.from_function(name='is_nucleic', data_type='BOOLEAN')
 def att_is_nucleic(mol_array: MolecularArray):
     return struc.filter_nucleotides(mol_array)
 
+@AttributeGetter.from_function(name='is_peptide', data_type='BOOLEAN')
 def att_is_peptide(mol_array: MolecularArray) -> np.ndarray[bool]:
     return struc.filter_amino_acids(mol_array) \
         | struc.filter_canonical_amino_acids(mol_array)
 
+@AttributeGetter.from_function(name='is_hetero', data_type='BOOLEAN')
 def att_is_hetero(mol_array: MolecularArray):
     return mol_array.hetero
 
+@AttributeGetter.from_function(name='is_carb', data_type='BOOLEAN')
 def att_is_carb(mol_array: MolecularArray) -> np.ndarray[bool]:
     return struc.filter_carbohydrates(mol_array)
 
+@AttributeGetter.from_function(name='sec_struct', data_type='INT')
 def att_sec_struct(mol_array: MolecularArray, file, calculate_ss):
     return comp_secondary_structure(mol_array) if calculate_ss or not file \
         else get_secondary_structure(mol_array, file)
@@ -368,7 +383,7 @@ def create_molecule(
     if include_bonds and mol_array.bonds:
         bonds = mol_array.bonds.as_array()
         bond_idx = bonds[:, [0, 1]]
-        bond_types = bonds[:, 2].copy(order='C') # the .copy(order='C') is to fix a weird ordering issue with the resulting array
+        bond_types = bonds[:, 2].copy(order='C')  # .copy(order='C') is to fix a weird ordering issue with the resulting array
 
     mol_object = obj.create_object(name=mol_name, collection=collection,
                                    locations=locations, bonds=bond_idx)
@@ -388,43 +403,41 @@ def create_molecule(
     # https://www.biotite-python.org/apidoc/biotite.structure.BondType.html#biotite.structure.BondType
     if include_bonds:
         try:
-            obj.add_attribute(
-                obj=mol_object, name='bond_type', data=bond_types,
-                date_type='INT', domain='EDGE'
-            )
+            obj.add_attribute(obj=mol_object, name='bond_type', data=bond_types,
+                              data_type='INT', domain='EDGE')
         except:
             warnings.warn('Unable to add bond types to the molecule.')
 
-    # These attributes will be added to the structure.
-    attributes = (
-        {'name': 'res_id',          'value': lambda: att_res_id(mol_array),                         'type': 'INT',     'domain': 'POINT'},
-        {'name': 'res_name',        'value': lambda: att_res_name(mol_array, mol_object),           'type': 'INT',     'domain': 'POINT'},
-        {'name': 'atomic_number',   'value': lambda: att_atomic_number(mol_array.element),          'type': 'INT',     'domain': 'POINT'},
-        {'name': 'b_factor',        'value': lambda: att_b_factor(mol_array),                       'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'vdw_radii',       'value': lambda: att_vdw_radii(mol_array, world_scale),         'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'chain_id',        'value': lambda: att_chain_id(mol_array),                       'type': 'INT',     'domain': 'POINT'},
-        {'name': 'atom_name',       'value': lambda: att_atom_name(mol_array),                      'type': 'INT',     'domain': 'POINT'},
-        {'name': 'lipophobicity',   'value': lambda: att_lipophobicity(mol_array),                  'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'charge',          'value': lambda: att_charge(mol_array),                         'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'is_backbone',     'value': lambda: att_is_backbone(mol_array),                    'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_alpha_carbon', 'value': lambda: att_is_alpha(mol_array),                       'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_solvent',      'value': lambda: att_is_solvent(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_nucleic',      'value': lambda: att_is_nucleic(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_peptide',      'value': lambda: att_is_peptide(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_hetero',       'value': lambda: att_is_hetero(mol_array),                      'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_carb',         'value': lambda: att_is_carb(mol_array),                        'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'sec_struct',      'value': lambda: att_sec_struct(mol_array, file, calculate_ss), 'type': 'INT',     'domain': 'POINT'}
-    )
+    # Attributes to be added
+    getters = {
+        att_res_id:        (mol_array,),
+        att_res_name:      (mol_array, mol_object),
+        att_atomic_number: (mol_array.element,),
+        att_b_factor:      (mol_array,),
+        att_vdw_radii:     (mol_array, world_scale),
+        att_chain_id:      (mol_array,),
+        att_atom_name:     (mol_array,),
+        att_lipophobicity: (mol_array,),
+        att_charge:        (mol_array,),
+        att_is_backbone:   (mol_array,),
+        att_is_alpha:      (mol_array,),
+        att_is_solvent:    (mol_array,),
+        att_is_nucleic:    (mol_array,),
+        att_is_peptide:    (mol_array,),
+        att_is_hetero:     (mol_array,),
+        att_is_carb:       (mol_array,),
+        att_sec_struct:    (mol_array, file, calculate_ss),
+    }
     # TODO Make it possible to include / exclude particular attributes.
     # This might boost performance and may or may not be a good idea.
     # Needs testing.
 
-    # Add the attributes to the object
-    for att in attributes:
+    # Add the attributes
+    for getter, args in getters.items():
         try:
-            obj.add_attribute(mol_object, att['name'], att['value'](), att['type'], att['domain'])
+            obj.add_attribute(mol_object, getter.name, getter.value(*args), getter.data_type, getter.domain)
         except:
-            warnings.warn(f"Unable to add attribute: {att['name']}")
+            warnings.warn(f"Unable to add attribute: {getter}")
 
     if not mol_frames:
         coll_frames = None

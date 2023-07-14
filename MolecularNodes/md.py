@@ -9,11 +9,12 @@ import bpy
 import numpy as np
 import warnings
 import MDAnalysis as mda
+import data
+import coll
+import obj
+import nodes
+from load import att_atomic_number
 
-from . import data
-from . import coll
-from . import obj
-from . import nodes
 
 bpy.types.Scene.mol_import_md_topology = bpy.props.StringProperty(
     name='path_topology',
@@ -82,7 +83,7 @@ class MOL_OT_Import_Protein_MD(bpy.types.Operator):
             starting_style=bpy.context.scene.mol_import_default_style)
         bpy.context.view_layer.objects.active = mol_object
         self.report({'INFO'}, message=f"Imported {repr(file_top)} as {mol_object.name} "
-                                       "with {n_frames} frames from {repr(file_traj)}.")
+                                      f"with {n_frames} frames from {repr(file_traj)}.")
         return {"FINISHED"}
 
 
@@ -104,6 +105,69 @@ def get_bonds(univ, selection: str) -> np.ndarray:
         except KeyError:
             pass  # Ignore bonds involving deselected atoms.
     return np.array(reindexed_bonds)
+
+
+def att_vdw_radii(univ, elements, world_scale: float):
+    try:
+        vdw_radii = np.array([mda.topology.tables.vdwradii.get(x, 1)
+                                for x in np.char.upper(elements)])
+    except:
+        # if fail to get radii, just return radii of 1 for everything as a backup
+        vdw_radii = np.ones(len(univ.atoms.names))
+        warnings.warn("Unable to extract VDW Radii. Defaulting to 1 for all points.")
+    return vdw_radii * world_scale
+
+
+def att_res_id(univ):
+    return univ.atoms.resnums
+
+
+def att_res_name(univ):
+    res_names =  np.array([x[:3] for x in univ.atoms.resnames])
+    return np.array([
+        data.residues[x]['res_name_num'] if x in data.residues else 0
+        for x in res_names])
+
+
+def att_b_factor(univ):
+    return univ.atoms.tempfactors
+
+
+def att_chain_id(univ, mol_object):
+    chain_id = univ.atoms.chainIDs
+    chain_id_unique = np.unique(chain_id)
+    chain_id_num = np.array([np.where(x == chain_id_unique)[0][0] for x in chain_id])
+    mol_object['chain_id_unique'] = chain_id_unique
+    return chain_id_num
+
+
+def bool_selection(univ, selection):
+    # For each atom, is it in the selection?
+    return np.isin(univ.atoms.ix, univ.select_atoms(selection).ix).astype(bool)
+
+
+def att_is_backbone(univ):
+    return bool_selection(univ, "backbone or nucleicbackbone")
+
+
+def att_is_alpha_carbon(univ):
+    return bool_selection(univ, 'name CA')
+
+
+def att_is_solvent(univ):
+    return bool_selection(univ, 'name OW or name HW1 or name HW2')
+
+
+def att_atom_type(univ):
+    return np.array(univ.atoms.types, dtype=int)
+
+
+def att_is_nucleic(univ):
+    return bool_selection(univ, 'nucleic')
+
+
+def att_is_peptide(univ):
+    return bool_selection(univ, 'protein')
 
 
 def load_trajectory(
@@ -192,77 +256,19 @@ def load_trajectory(
     # and the warning is reported there rather than setting up a try: except: for each individual attribute
     # which makes some really messy code.
 
-    def att_atomic_number():
-        return np.array([
-            # if getting the element fails for some reason, return an atomic number of -1
-            data.elements[x]["atomic_number"] if x in data.elements else -1
-            for x in np.char.title(elements)
-        ])
-
-    def att_vdw_radii():
-        try:
-            vdw_radii = np.array([mda.topology.tables.vdwradii.get(x, 1)
-                                  for x in np.char.upper(elements)])
-        except:
-            # if fail to get radii, just return radii of 1 for everything as a backup
-            vdw_radii = np.ones(len(univ.atoms.names))
-            warnings.warn("Unable to extract VDW Radii. Defaulting to 1 for all points.")
-        return vdw_radii * world_scale
-
-    def att_res_id():
-        return univ.atoms.resnums
-
-    def att_res_name():
-        res_names =  np.array([x[:3] for x in univ.atoms.resnames])
-        return np.array([
-            data.residues[x]['res_name_num'] if x in data.residues else 0
-            for x in res_names])
-
-    def att_b_factor():
-        return univ.atoms.tempfactors
-
-    def att_chain_id():
-        chain_id = univ.atoms.chainIDs
-        chain_id_unique = np.unique(chain_id)
-        chain_id_num = np.array([np.where(x == chain_id_unique)[0][0] for x in chain_id])
-        mol_object['chain_id_unique'] = chain_id_unique
-        return chain_id_num
-
-    def bool_selection(selection):
-        # For each atom, is it in the selection?
-        return np.isin(univ.atoms.ix, univ.select_atoms(selection).ix).astype(bool)
-
-    def att_is_backbone():
-        return bool_selection("backbone or nucleicbackbone")
-
-    def att_is_alpha_carbon():
-        return bool_selection('name CA')
-
-    def att_is_solvent():
-        return bool_selection('name OW or name HW1 or name HW2')
-
-    def att_atom_type():
-        return np.array(univ.atoms.types, dtype=int)
-
-    def att_is_nucleic():
-        return bool_selection('nucleic')
-
-    def att_is_peptide():
-        return bool_selection('protein')
-
     attributes = (
-        {'name': 'atomic_number',   'value': att_atomic_number,   'type': 'INT',     'domain': 'POINT'},
-        {'name': 'vdw_radii',       'value': att_vdw_radii,       'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'res_id',          'value': att_res_id,          'type': 'INT',     'domain': 'POINT'},
-        {'name': 'res_name',        'value': att_res_name,        'type': 'INT',     'domain': 'POINT'},
-        {'name': 'b_factor',        'value': att_b_factor,        'type': 'float',   'domain': 'POINT'},
-        {'name': 'chain_id',        'value': att_chain_id,        'type': 'INT',     'domain': 'POINT'},
-        {'name': 'atom_types',      'value': att_atom_type,       'type': 'INT',     'domain': 'POINT'},
-        {'name': 'is_backbone',     'value': att_is_backbone,     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_alpha_carbon', 'value': att_is_alpha_carbon, 'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_solvent',      'value': att_is_solvent,      'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_nucleic',      'value': att_is_nucleic,      'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_peptide',      'value': att_is_peptide,      'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'atomic_number',   'value': lambda: att_atomic_number(elements),                'type': 'INT',     'domain': 'POINT'},
+        {'name': 'vdw_radii',       'value': lambda: att_vdw_radii(univ, elements, world_scale), 'type': 'FLOAT',   'domain': 'POINT'},
+        {'name': 'res_id',          'value': lambda: att_res_id(univ),                           'type': 'INT',     'domain': 'POINT'},
+        {'name': 'res_name',        'value': lambda: att_res_name(univ),                         'type': 'INT',     'domain': 'POINT'},
+        {'name': 'b_factor',        'value': lambda: att_b_factor(univ),                         'type': 'float',   'domain': 'POINT'},
+        {'name': 'chain_id',        'value': lambda: att_chain_id(univ, mol_object),             'type': 'INT',     'domain': 'POINT'},
+        {'name': 'atom_types',      'value': lambda: att_atom_type(univ),                        'type': 'INT',     'domain': 'POINT'},
+        {'name': 'is_backbone',     'value': lambda: att_is_backbone(univ),                      'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_alpha_carbon', 'value': lambda: att_is_alpha_carbon(univ),                  'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_solvent',      'value': lambda: att_is_solvent(univ),                       'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_nucleic',      'value': lambda: att_is_nucleic(univ),                       'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_peptide',      'value': lambda: att_is_peptide(univ),                       'type': 'BOOLEAN', 'domain': 'POINT'},
     )
 
     for att in attributes:

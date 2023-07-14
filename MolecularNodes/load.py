@@ -230,10 +230,10 @@ def comp_secondary_structure(mol_array: MolecularArray):
 
 MolecularArray: type = struc.AtomArray | struc.AtomArrayStack
 
-def att_atomic_number(mol_array: MolecularArray):
+def att_atomic_number(elements: np.ndarray[str]):
     return np.array([
         data.elements[symbol]['atomic_number'] if symbol in data.elements else -1
-        for symbol in np.char.title(mol_array.element)
+        for symbol in np.char.title(elements)
     ])
 
 def att_res_id(mol_array: MolecularArray):
@@ -397,23 +397,23 @@ def create_molecule(
 
     # These attributes will be added to the structure.
     attributes = (
-        {'name': 'res_id',          'value': att_res_id(mol_array),                         'type': 'INT',     'domain': 'POINT'},
-        {'name': 'res_name',        'value': att_res_name(mol_array, mol_object),           'type': 'INT',     'domain': 'POINT'},
-        {'name': 'atomic_number',   'value': att_atomic_number(mol_array),                  'type': 'INT',     'domain': 'POINT'},
-        {'name': 'b_factor',        'value': att_b_factor(mol_array),                       'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'vdw_radii',       'value': att_vdw_radii(mol_array, world_scale),         'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'chain_id',        'value': att_chain_id(mol_array),                       'type': 'INT',     'domain': 'POINT'},
-        {'name': 'atom_name',       'value': att_atom_name(mol_array),                      'type': 'INT',     'domain': 'POINT'},
-        {'name': 'lipophobicity',   'value': att_lipophobicity(mol_array),                  'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'charge',          'value': att_charge(mol_array),                         'type': 'FLOAT',   'domain': 'POINT'},
-        {'name': 'is_backbone',     'value': att_is_backbone(mol_array),                    'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_alpha_carbon', 'value': att_is_alpha(mol_array),                       'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_solvent',      'value': att_is_solvent(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_nucleic',      'value': att_is_nucleic(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_peptide',      'value': att_is_peptide(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_hetero',       'value': att_is_hetero(mol_array),                      'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'is_carb',         'value': att_is_carb(mol_array),                        'type': 'BOOLEAN', 'domain': 'POINT'},
-        {'name': 'sec_struct',      'value': att_sec_struct(mol_array, file, calculate_ss), 'type': 'INT',     'domain': 'POINT'}
+        {'name': 'res_id',          'value': lambda: att_res_id(mol_array),                         'type': 'INT',     'domain': 'POINT'},
+        {'name': 'res_name',        'value': lambda: att_res_name(mol_array, mol_object),           'type': 'INT',     'domain': 'POINT'},
+        {'name': 'atomic_number',   'value': lambda: att_atomic_number(mol_array.element),          'type': 'INT',     'domain': 'POINT'},
+        {'name': 'b_factor',        'value': lambda: att_b_factor(mol_array),                       'type': 'FLOAT',   'domain': 'POINT'},
+        {'name': 'vdw_radii',       'value': lambda: att_vdw_radii(mol_array, world_scale),         'type': 'FLOAT',   'domain': 'POINT'},
+        {'name': 'chain_id',        'value': lambda: att_chain_id(mol_array),                       'type': 'INT',     'domain': 'POINT'},
+        {'name': 'atom_name',       'value': lambda: att_atom_name(mol_array),                      'type': 'INT',     'domain': 'POINT'},
+        {'name': 'lipophobicity',   'value': lambda: att_lipophobicity(mol_array),                  'type': 'FLOAT',   'domain': 'POINT'},
+        {'name': 'charge',          'value': lambda: att_charge(mol_array),                         'type': 'FLOAT',   'domain': 'POINT'},
+        {'name': 'is_backbone',     'value': lambda: att_is_backbone(mol_array),                    'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_alpha_carbon', 'value': lambda: att_is_alpha(mol_array),                       'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_solvent',      'value': lambda: att_is_solvent(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_nucleic',      'value': lambda: att_is_nucleic(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_peptide',      'value': lambda: att_is_peptide(mol_array),                     'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_hetero',       'value': lambda: att_is_hetero(mol_array),                      'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'is_carb',         'value': lambda: att_is_carb(mol_array),                        'type': 'BOOLEAN', 'domain': 'POINT'},
+        {'name': 'sec_struct',      'value': lambda: att_sec_struct(mol_array, file, calculate_ss), 'type': 'INT',     'domain': 'POINT'}
     )
     # TODO Make it possible to include / exclude particular attributes.
     # This might boost performance and may or may not be a good idea.
@@ -422,7 +422,7 @@ def create_molecule(
     # Add the attributes to the object
     for att in attributes:
         try:
-            obj.add_attribute(mol_object, att['name'], att['value'], att['type'], att['domain'])
+            obj.add_attribute(mol_object, att['name'], att['value'](), att['type'], att['domain'])
         except:
             warnings.warn(f"Unable to add attribute: {att['name']}")
 

@@ -360,7 +360,7 @@ def create_molecule(
     else:
         centroid = np.array([0, 0, 0])
 
-    if not collection:
+    if collection is None:
         collection = coll.mn()
 
     bonds = []
@@ -368,7 +368,7 @@ def create_molecule(
     if include_bonds and mol_array.bonds:
         bonds = mol_array.bonds.as_array()
         bond_idx = bonds[:, [0, 1]]
-        bond_types = bonds[:, 2].copy(order = 'C') # the .copy(order = 'C') is to fix a weird ordering issue with the resulting array
+        bond_types = bonds[:, 2].copy(order='C') # the .copy(order='C') is to fix a weird ordering issue with the resulting array
 
     mol_object = obj.create_object(name=mol_name, collection=collection,
                                    locations=locations, bonds=bond_idx)
@@ -440,19 +440,18 @@ def create_molecule(
             obj_frame = obj.create_object(
                 name=f'{mol_object.name}_frame_{i}',
                 collection=coll_frames,
-                locations=frame.coord * world_scale - centroid
-            )
+                locations=frame.coord * world_scale - centroid)
             if b_factors:
                 try:
                     obj.add_attribute(obj_frame, 'b_factor', b_factors[i])
                 except:
                     b_factors.clear()
 
-        # disable the frames collection so it is not seen
+        # Disable (and thereby hide) the frames collection.
         bpy.context.view_layer.layer_collection.children[collection.name].children[coll_frames.name].exclude = True
 
-    # add custom properties to the actual blender object, such as number of chains, biological assemblies etc
-    # currently biological assemblies can be problematic to holding off on doing that
+    # Add custom properties to the Blender object (no. of chains, biological assemblies etc).
+    # NOTE Currently, biological assemblies can be problematic.
     try:
         mol_object['chain_id_unique'] = list(np.unique(mol_array.chain_id))
     except:

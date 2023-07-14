@@ -41,7 +41,9 @@ def mol_append_node(node_name: str):
 
 
 def mol_base_material(mat_name: str = 'MOL_atomic_material'):
-    """Append MOL_atomic_material to the .blend file it it doesn't already exist, and return that material."""
+    ''' Append material to the .blend file (if it doesn't already exist).
+        Return the material.
+    '''
     if (material := bpy.data.materials.get(mat_name)) is not None:
         return material
     bpy.ops.wm.append(
@@ -54,29 +56,29 @@ def gn_new_group_empty(name: str = "Geometry Nodes") -> GeometryNodeTree:
     # If a group by this name already exists, use that
     if (group := bpy.data.node_groups.get(name)) is not None:
         return group
-    # Otherwise, create and intialise a new group
+    # Otherwise, make a new group
     group: GeometryNodeTree = bpy.data.node_groups.new(name, 'GeometryNodeTree')
-    group.inputs.new('NodeSocketGeometry', "Geometry")
-    group.outputs.new('NodeSocketGeometry', "Geometry")
-    input_node = group.nodes.new('NodeGroupInput')
+    group.inputs .new('NodeSocketGeometry', 'Geometry')
+    group.outputs.new('NodeSocketGeometry', 'Geometry')
+    input_node  = group.nodes.new('NodeGroupInput')
     output_node = group.nodes.new('NodeGroupOutput')
     output_node.is_active_output = True
-    input_node.select = False
+    input_node .select = False
     output_node.select = False
-    input_node.location.x = -200 - input_node.width
+    input_node .location.x = -200 - input_node.width
     output_node.location.x = 200
     group.links.new(output_node.inputs[0], input_node.outputs[0])
     return group
 
 
 def add_custom_node_group_to_node(
-    parent_group, node_name: str, location: tuple[float] = (0, 0), width=200
+    parent_group, node_name: str, location: tuple[float, float] = (0, 0), width: int = 200
 ) -> GeometryNodeGroup:
     mol_append_node(node_name)
     node: GeometryNodeGroup = parent_group.nodes.new('GeometryNodeGroup')
     node.node_tree = bpy.data.node_groups[node_name]
     node.location = tuple(location)
-    node.width = 200  # TODO Check that this works
+    node.width = width  # TODO Check that this works
     return node
 
 
@@ -109,82 +111,90 @@ def create_starting_nodes_starfile(obj):
     node_output = node_mod.node_group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
     node_output.location = (900, 0)
 
-    node_delete = node_group.nodes.new("GeometryNodeDeleteGeometry")
-    node_delete.location = (500, 0)
+    def new_node_in_group(group, kind: str, location: tuple[float, float]):
+        node = group.nodes.new(kind)
+        node.location = location
+        return node
 
-    node_instance = node_group.nodes.new("GeometryNodeInstanceOnPoints")
-    node_instance.location = (675, 0)
+    node_delete = new_node_in_group(
+        node_group, "GeometryNodeDeleteGeometry", location=(500, 0))
 
-    node_get_imageid = node_group.nodes.new("GeometryNodeInputNamedAttribute")
-    node_get_imageid.location = (0, 200)
+    node_instance = new_node_in_group(
+        node_group, "GeometryNodeInstanceOnPoints", location=(675, 0))
+
+    node_get_imageid = new_node_in_group(
+        node_group, "GeometryNodeInputNamedAttribute", location=(0, 200))
     node_get_imageid.inputs['Name'].default_value = "MOLImageId"
     node_get_imageid.data_type = "INT"
 
-    node_subtract = node_group.nodes.new("ShaderNodeMath")
-    node_subtract.location = (160, 200)
+    node_subtract = new_node_in_group(
+        node_group, "ShaderNodeMath", location=(160, 200))
     node_subtract.operation = "SUBTRACT"
     node_subtract.inputs[1].default_value = 1
     node_subtract.inputs[0].default_value = 1
 
-    node_compare = node_group.nodes.new("FunctionNodeCompare")
-    node_compare.location = (320, 200)
+    node_compare = new_node_in_group(
+        node_group, "FunctionNodeCompare", location=(320, 200))
     node_compare.operation = "NOT_EQUAL"
     node_compare.data_type = "INT"
 
-    node_object_info = node_group.nodes.new("GeometryNodeObjectInfo")
-    node_object_info.location = (200, -200)
+    node_object_info = new_node_in_group(
+        node_group, "GeometryNodeObjectInfo", location=(200, -200))
 
-    node_get_rotation = node_group.nodes.new("GeometryNodeInputNamedAttribute")
-    node_get_rotation.location = (450, -200)
+    node_get_rotation = new_node_in_group(
+        node_group, "GeometryNodeInputNamedAttribute", location=(450, -200))
     node_get_rotation.inputs['Name'].default_value = "MOLRotation"
     node_get_rotation.data_type = "FLOAT_VECTOR"
 
-    node_get_id = node_group.nodes.new("GeometryNodeInputID")
-    node_get_id.location = (0, -200)
+    node_get_id = new_node_in_group(
+        node_group, "GeometryNodeInputID", location=(0, -200))
 
-    node_statistics = node_group.nodes.new("GeometryNodeAttributeStatistic")
-    node_statistics.location = (200, -400)
+    X = iter(range(200, 200 * 6, 200))
+    Y = -400
 
-    node_compare_maxid = node_group.nodes.new("FunctionNodeCompare")
-    node_compare_maxid.location = (400, -400)
+    node_statistics = new_node_in_group(
+        node_group, "GeometryNodeAttributeStatistic", location=(next(X), Y))
+
+    node_compare_maxid = new_node_in_group(
+        node_group, "FunctionNodeCompare", location=(next(X), Y))
     node_compare_maxid.operation = "EQUAL"
 
-    node_bool_math = node_group.nodes.new("FunctionNodeBooleanMath")
-    node_bool_math.location = (600, -400)
+    node_bool_math = new_node_in_group(
+        node_group, "FunctionNodeBooleanMath", location=(next(X), Y))
     node_bool_math.operation = "OR"
 
-    node_switch = node_group.nodes.new("GeometryNodeSwitch")
-    node_switch.location = (800, -400)
+    node_switch = new_node_in_group(
+        node_group, "GeometryNodeSwitch", location=(next(X), Y))
 
-    node_cone = node_group.nodes.new("GeometryNodeMeshCone")
-    node_cone.location = (1000, -400)
+    node_cone = new_node_in_group(
+        node_group, "GeometryNodeMeshCone", location=(next(X), Y))
 
-    node_group.links.new(node_input.outputs[0], node_delete.inputs[0])
-    node_group.links.new(node_delete.outputs[0], node_instance.inputs[0])
+    node_group.links.new(node_input.outputs[0],    node_delete.inputs[0])
+    node_group.links.new(node_delete.outputs[0],   node_instance.inputs[0])
     node_group.links.new(node_instance.outputs[0], node_output.inputs[0])
 
     node_group.links.new(node_input.outputs[1], node_object_info.inputs[0])
     node_group.links.new(node_input.outputs[2], node_subtract.inputs[0])
     node_group.links.new(node_input.outputs[3], node_bool_math.inputs[0])
 
-    node_group.links.new(node_subtract.outputs[0], node_compare.inputs[2])
-    node_group.links.new(node_get_imageid.outputs[4], node_compare.inputs[3])
-    node_group.links.new(node_compare.outputs[0], node_delete.inputs[1])
-    node_group.links.new(node_statistics.outputs[4], node_compare_maxid.inputs[0])
-    node_group.links.new(node_compare_maxid.outputs[0], node_bool_math.inputs[1])
-    node_group.links.new(node_get_id.outputs[0], node_statistics.inputs[2])
+    node_group.links.new(node_subtract.outputs[0],             node_compare.inputs[2])
+    node_group.links.new(node_get_imageid.outputs[4],          node_compare.inputs[3])
+    node_group.links.new(node_compare.outputs[0],              node_delete.inputs[1])
+    node_group.links.new(node_statistics.outputs[4],           node_compare_maxid.inputs[0])
+    node_group.links.new(node_compare_maxid.outputs[0],        node_bool_math.inputs[1])
+    node_group.links.new(node_get_id.outputs[0],               node_statistics.inputs[2])
     node_group.links.new(node_object_info.outputs["Geometry"], node_statistics.inputs[0])
-    node_group.links.new(node_bool_math.outputs[0], node_switch.inputs[1])
+    node_group.links.new(node_bool_math.outputs[0],            node_switch.inputs[1])
     node_group.links.new(node_object_info.outputs["Geometry"], node_switch.inputs[14])
-    node_group.links.new(node_cone.outputs[0], node_switch.inputs[15])
-    node_group.links.new(node_switch.outputs[6],     node_instance.inputs["Instance"])
-    node_group.links.new(node_get_rotation.outputs[0], node_instance.inputs["Rotation"])
+    node_group.links.new(node_cone.outputs[0],                 node_switch.inputs[15])
+    node_group.links.new(node_switch.outputs[6],               node_instance.inputs["Instance"])
+    node_group.links.new(node_get_rotation.outputs[0],         node_instance.inputs["Rotation"])
 
     # Need to manually set Image input to 1, otherwise it will be 0 (even though default is 1)
     node_mod['Input_3'] = 1
 
 
-def create_starting_nodes_density(obj, threshold = 0.8):
+def create_starting_nodes_density(obj, threshold: float = 0.8):
 
     node_mod = activate_molecular_nodes_modifier_on(obj)
 
@@ -383,7 +393,7 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
     return group
 
 
-def rotation_matrix(node_group, mat, location: tuple[float] = (0, 0), world_scale: float = 0.01) -> GeometryNodeGroup:
+def rotation_matrix(node_group, mat, location: tuple[float, float] = (0, 0), world_scale: float = 0.01) -> GeometryNodeGroup:
     """Add a Rotation & Translation node from a 3x4 matrix.
 
     Args:
@@ -476,10 +486,10 @@ def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0
     # link the just-created custom node group data to the node group in the tree
     # new_node_group = node_mod.node_group.nodes.new("GeometryNodeGroup")
     # new_node_group.node_tree = bpy.data.node_groups[chain_group.name]
-    # resize the newly created node to be a bit wider
+    # Slightly widen the newly created node
     # node_mod.node_group.nodes[-1].width = 200
     # the chain_id_list and output_name are passed in from the operator when it is called
-    # these are custom properties that are associated with the object when it is initial created
+    # these are custom properties that are associated with the object when it is constructed
     return chain_group
 
 
@@ -505,9 +515,8 @@ def chain_color(node_name, input_list, label_prefix: str = "Chain "):
     chain_number_node.outputs.get('Attribute')
 
     node_sep_dis = 180  # Horizontal distance between nodes
-    counter: int = 0
-    for chain_name in input_list:
-        offset = counter * node_sep_dis
+    for i, chain_name in enumerate(input_list):
+        offset = i * node_sep_dis
         current_chain = str(label_prefix) + str(chain_name)
         # Node compare inputs 2 & 3
         node_compare = chain_group.nodes.new('FunctionNodeCompare')
@@ -515,7 +524,7 @@ def chain_color(node_name, input_list, label_prefix: str = "Chain "):
         node_compare.location = (offset, 100)
         node_compare.operation = 'EQUAL'
 
-        node_compare.inputs[3].default_value = counter
+        node_compare.inputs[3].default_value = i
 
         # Link the named attribute to the compare
         chain_group.links.new(chain_number_node.outputs[4], node_compare.inputs[2])
@@ -531,11 +540,10 @@ def chain_color(node_name, input_list, label_prefix: str = "Chain "):
         chain_group.links.new(node_input.outputs[current_chain], node_color.inputs[11])
         chain_group.links.new(node_compare.outputs['Result'], node_color.inputs['Switch'])
 
-        if counter > 0:
+        if i > 0:
             chain_group.links.new(node_color_previous.outputs[4], node_color.inputs[10])
 
         node_color_previous = node_color
-        counter += 1
 
     chain_group.outputs.new("NodeSocketColor", "Color")
     node_output = chain_group.nodes.new("NodeGroupOutput")

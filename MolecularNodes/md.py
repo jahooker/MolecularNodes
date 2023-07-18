@@ -75,7 +75,7 @@ class MOL_OT_Import_Protein_MD(bpy.types.Operator):
 
         mol_object, coll_frames = load_trajectory(
             file_top=file_top, file_traj=file_traj,
-            md_start=md_start, md_end=md_end, md_step=md_step,
+            md_slice=slice(md_start, md_end, md_step),
             name=name, selection=selection, include_bonds=include_bonds,
             custom_selections=custom_selections)
         n_frames = len(coll_frames.objects)
@@ -84,12 +84,12 @@ class MOL_OT_Import_Protein_MD(bpy.types.Operator):
             obj=mol_object, coll_frames=coll_frames,
             starting_style=bpy.context.scene.mol_import_default_style)
         bpy.context.view_layer.objects.active = mol_object
-        self.report({'INFO'}, message=f"Imported {repr(file_top)} as {mol_object.name} "
-                                      f"with {n_frames} frames from {repr(file_traj)}.")
+        self.report({'INFO'}, message=f"Imported {file_top} as {mol_object.name} "
+                                      f"with {n_frames} frames from {file_traj}.")
         return {"FINISHED"}
 
 
-def get_bonds(univ, selection: str) -> np.ndarray:
+def get_bonds(univ, selection: str) -> np.ndarray[int]:
 
     if not hasattr(univ, 'bonds'):
         return np.array(())
@@ -172,8 +172,8 @@ def att_is_peptide(univ):
 
 
 def load_trajectory(
-    file_top, file_traj, name: str = "NewTrajectory", md_start: int = 0, md_end: int = 49,
-    md_step: int = 1, world_scale: float =0.01, include_bonds: bool = True,
+    file_top, file_traj, name: str = "NewTrajectory", md_slice: slice = slice(49),
+    world_scale: float =0.01, include_bonds: bool = True,
     selection: str = "not (name H* or name OW)", custom_selections: Optional[dict] = None
 ) -> tuple[bpy.types.Object, bpy.types.Collection]:
     """
@@ -187,12 +187,8 @@ def load_trajectory(
         The path to the trajectory file.
     name : str, optional
         The name of the trajectory (default: "default").
-    md_start : int, optional
-        The starting frame of the trajectory to load (default: 0).
-    md_end : int, optional
-        The ending frame of the trajectory to load (default: 49).
-    md_step : int, optional
-        The step size between frames to load (default: 1).
+    md_slice : slice, optional
+        Which frames of the trajectory to load (default: the first 49 frames).
     world_scale : float, optional
         The scaling factor for the world coordinates (default: 0.01).
     include_bonds : bool, optional
@@ -222,9 +218,9 @@ def load_trajectory(
     univ = mda.Universe(file_top, file_traj) if file_traj else mda.Universe(file_top)
 
     # Separate the trajectory, separate to the topology or the subsequence selections
-    traj = univ.trajectory[md_start:md_end:md_step]
+    traj = univ.trajectory[md_slice]
 
-    # If there is a non-blank selection, apply the selection text to the universe for later use.
+    # If there is a selection, apply the selection text to the universe for later use.
     # This also affects the trajectory, even though it has been separated earlier.
     if selection:
         try:

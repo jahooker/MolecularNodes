@@ -41,8 +41,7 @@ def get_transformations_mmtf(assemblies) -> np.ndarray[float]:
 
 def create_assembly_node(name, transformation_matrices: list):
 
-    node_mat = bpy.data.node_groups.get(f'MOL_RotTransMat_{name}')
-    if node_mat:
+    if (node_mat := bpy.data.node_groups.get(f'MOL_RotTransMat_{name}')):
         return node_mat
 
     node_mat = nodes.gn_new_group_empty(f'MOL_RotTransMat_{name}')

@@ -93,7 +93,7 @@ def create_starting_nodes_starfile(obj):
     node_name = f"MOL_starfile_{obj.name}"
 
     # If there already exists a node tree by this name, use that
-    if (node_group := bpy.data.node_groups.get(node_name)):
+    if (node_group := bpy.data.node_groups.get(node_name)) is not None:
         node_mod.node_group = node_group
         return node_group
 
@@ -201,7 +201,7 @@ def create_starting_nodes_density(obj, threshold: float = 0.8):
     node_name = f"MOL_density_{obj.name}"
 
     # If there already exists a node tree by this name, use that
-    if (node_group := bpy.data.node_groups.get(node_name)):
+    if (node_group := bpy.data.node_groups.get(node_name)) is not None:
         node_mod.node_group = node_group
         return node_group
 
@@ -271,20 +271,20 @@ def create_starting_node_tree(obj, coll_frames, starting_style = "atoms"):
     link(node_style.outputs[0], node_output.inputs['Geometry'])
     node_style.inputs['Material'].default_value = mol_base_material()
 
+    if not coll_frames: return
     # If there are multiple frames, set up the nodes required for an animation
-    if coll_frames:
-        node_output.location = (1100, 0)
-        node_style.location = (800, 0)
+    node_output.location = (1100, 0)
+    node_style.location = (800, 0)
 
-        node_animate_frames = add_custom_node_group_to_node(node_group, 'MOL_animate_frames', [500, 0])
-        node_animate_frames.inputs['Frames'].default_value = coll_frames
+    node_animate_frames = add_custom_node_group_to_node(node_group, 'MOL_animate_frames', [500, 0])
+    node_animate_frames.inputs['Frames'].default_value = coll_frames
 
-        # node_animate_frames.inputs['Absolute Frame Position'].default_value = True
+    # node_animate_frames.inputs['Absolute Frame Position'].default_value = True
 
-        node_animate = add_custom_node_group_to_node(node_group, 'MOL_animate_value', [500, -300])
-        link(node_colour.outputs['Atoms'], node_animate_frames.inputs['Atoms'])
-        link(node_animate_frames.outputs['Atoms'], node_style.inputs['Atoms'])
-        link(node_animate.outputs['Animate 0..1'], node_animate_frames.inputs['Animate 0..1'])
+    node_animate = add_custom_node_group_to_node(node_group, 'MOL_animate_value', [500, -300])
+    link(node_colour.outputs['Atoms'], node_animate_frames.inputs['Atoms'])
+    link(node_animate_frames.outputs['Atoms'], node_style.inputs['Atoms'])
+    link(node_animate.outputs['Animate 0..1'], node_animate_frames.inputs['Animate 0..1'])
 
 
 def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):

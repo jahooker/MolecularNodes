@@ -8,6 +8,7 @@ __author__ = "Brady Johnston"
 import bpy
 import numpy as np
 import warnings
+from typing import Optional
 import MDAnalysis as mda
 import data
 import coll
@@ -136,11 +137,9 @@ def att_b_factor(univ):
 
 @AttributeGetter.from_function(name='chain_id', data_type='INT')
 def att_chain_id(univ, mol_object):
-    chain_id = univ.atoms.chainIDs
-    chain_id_unique = np.unique(chain_id)
-    chain_id_num = np.array([np.where(x == chain_id_unique)[0][0] for x in chain_id])
+    chain_id_unique = np.unique(univ.atoms.chainIDs)
     mol_object['chain_id_unique'] = chain_id_unique
-    return chain_id_num
+    return np.nonzero(univ.atoms.chainIDs.reshape(-1, 1) == chain_id_unique)[1]
 
 
 def bool_selection(univ, selection) -> np.ndarray[bool]:
@@ -175,7 +174,8 @@ def att_is_peptide(univ):
 def load_trajectory(
     file_top, file_traj, name: str = "NewTrajectory", md_start: int = 0, md_end: int = 49,
     md_step: int = 1, world_scale: float =0.01, include_bonds: bool = True,
-    selection: str = "not (name H* or name OW)", custom_selections=None) -> tuple[bpy.types.Object, bpy.types.Collection]:
+    selection: str = "not (name H* or name OW)", custom_selections: Optional[dict] = None
+) -> tuple[bpy.types.Object, bpy.types.Collection]:
     """
     Loads a molecular dynamics trajectory from the specified files.
 
@@ -280,16 +280,15 @@ def load_trajectory(
         except:
             warnings.warn(f"Unable to add attribute: {getter}.")
 
-    # Add custom selections if any exist
-    if custom_selections:
-        for sel in custom_selections:
-            try:
-                obj.add_attribute(
-                    obj=mol_object, name=sel.name, 
-                    data=bool_selection(sel.selection), data_type="BOOLEAN",
-                    domain="POINT")
-            except:
-                warnings.warn(f"Unable to add custom selection: {sel.name}")
+    # Add any custom selections
+    for sel in custom_selections or {}:
+        try:
+            obj.add_attribute(
+                obj=mol_object, name=sel.name, 
+                data=bool_selection(sel.selection), data_type="BOOLEAN",
+                domain="POINT")
+        except:
+            warnings.warn(f"Unable to add custom selection: {sel.name}")
 
     coll_frames = coll.frames(name)
 

@@ -306,11 +306,10 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
         except AttributeError:
             pass
 
-    # loop over the outputs and create an output for each
-    for o in looping_node.outputs.values():
-        group.outputs.new(socket_types.get(o.type), o.name)
+    group.inputs['Selection'].hide_value = True
 
-    group.outputs.new(socket_types.get('GEOMETRY'), 'Chain Instances')
+    group.outputs.new(socket_types.get('GEOMETRY'), 'Surface Geometry')
+    group.outputs.new(socket_types.get('GEOMETRY'), 'Surface Instances')
 
     # add in the inputs and theo outputs inside of the node
     node_input = group.nodes.new('NodeGroupInput')
@@ -321,8 +320,7 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
     link = group.links.new
 
     node_input = group.nodes[bpy.app.translations.pgettext_data("Group Input",)]
-    # node_input.inputs['Geometry'].name = 'Atoms'
-    node_output = group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
+    # node_output = group.nodes[bpy.app.translations.pgettext_data("Group Output",)]
 
     node_chain_id = group.nodes.new("GeometryNodeInputNamedAttribute")
     node_chain_id.location = (-250, -450)
@@ -353,7 +351,6 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
         node_surface_single.location = (300, offset)
 
         link(node_separate.outputs['Selection'], node_surface_single.inputs['Atoms'])
-        # node_surface_single = add_custom_node_group_to_node(group.node_group, 'MOL_style_surface_single', [100, offset])
 
         for i in node_surface_single.inputs.values():
             if i.type != 'GEOMETRY':
@@ -365,31 +362,19 @@ def create_custom_surface(name, n_chains, *, merge_kind='join_geometry'):
     node_join_geometry = group.nodes.new('GeometryNodeJoinGeometry')
     node_join_geometry.location = (500, 0)
 
-    node_instance = group.nodes.new('GeometryNodeGeometryToInstance')
-    node_instance.location = (500, -600)
+    node_geometry_to_instance = group.nodes.new('GeometryNodeGeometryToInstance')
+    node_geometry_to_instance.location = (500, -600)
 
     node_join_volume = group.nodes.new('GeometryNodeJoinGeometry')
     node_join_volume.location = (500, -300)
 
-    # TODO: turn these into instances instead of just joining geometry
-    assert merge_kind in ('join_geometry', 'instance', 'join_volume')
-    # TODO: Offer the choice of merge_kind to users in GUI
-    merge_node, link1, link2 = {
-        'join_geometry': (node_join_geometry,
-            ('Surface mesh', 'Geometry'), ('Geometry', 'Surface mesh')),
-        'instance': (node_instance,
-            ('Surface', 'Geometry'), ('Instances', 'Chain Instances')),
-        'join_volume': (node_join_volume,
-            ('Volume', 'Geometry'), ('Geometry', 'Volume')),
-    }[merge_kind]
-
-    i, j = link1
     for n in reversed(list_node_surface):
-        link(n.outputs[i], merge_node.inputs[j])
+        link(n.outputs[0], node_join_geometry.inputs['Geometry'])
+        link(n.outputs[0], node_geometry_to_instance.inputs['Geometry'])
 
-    i, j = link2
-    link(merge_node.outputs[i], node_output.inputs[j])
-
+    # link the joined nodes to the outputs
+    link(node_join_geometry.outputs['Geometry'], node_output.inputs[0])
+    link(node_geometry_to_instance.outputs['Instances'], node_output.inputs['Surface Instances'])
     return group
 
 

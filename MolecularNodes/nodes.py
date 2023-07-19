@@ -560,12 +560,8 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
     selections in specific proteins.
     """
     # Preprocess input_resid_string to allow fuzzy matching
-    for c in ";/+ .":
-        if c in input_resid_string:
-            input_resid_string = input_resid_string.replace(c, ',')
-    for c in "_=:":
-        if c in input_resid_string:
-            input_resid_string = input_resid_string.replace(c, '-')
+    for k, v in ({k: ',' for k in ';/+ .'} | {k: '-' for k in '_=:'}).items():
+        input_resid_string = input_resid_string.replace(k, v)
 
     # Parse input_resid_string into sub selecting string list
     sub_list = list(filter(bool, input_resid_string.split(',')))
@@ -580,47 +576,46 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
     residue_id_group_in = residue_id_group.nodes.new("NodeGroupInput")
     residue_id_group_in.location = (0, node_sep_dis * len(sub_list) / 2)
 
-    for residue_id_index, residue_id in enumerate(sub_list):
+    for residue_id in sub_list:
 
         if '-' in residue_id:
-            [resid_start, resid_end] = residue_id.split('-')[:2]
-            # set two new inputs
+            resid_start, resid_end, *_ = residue_id.split('-')
+            # Set two new inputs
             residue_id_group.inputs.new("NodeSocketInt", 'res_id_start').default_value = int(resid_start)
             residue_id_group.inputs.new("NodeSocketInt", 'res_id_end').default_value = int(resid_end)
         else:
-            # set a new input and set the resid
+            # Set a new input and set the resid
             residue_id_group.inputs.new("NodeSocketInt", 'res_id').default_value = int(residue_id)
 
-    counter: int = 0  # A counter for MOL_sel_res_id* nodes
-    for residue_id_index, residue_id in enumerate(sub_list):
+    num_new_links: int = 0  # A counter for MOL_sel_res_id* nodes
+    for i, residue_id in enumerate(sub_list):
 
         # Add a new node of MOL_sel_res_id or MOL_sek_res_id_range
         current_node = residue_id_group.nodes.new("GeometryNodeGroup")
 
         # Add a bool_math block
         bool_math = residue_id_group.nodes.new("FunctionNodeBooleanMath")
-        bool_math.location = (400, residue_id_index * node_sep_dis + node_sep_dis)
+        bool_math.location = (400, i * node_sep_dis + node_sep_dis)
         bool_math.operation = "OR"
 
         if '-' in residue_id:
             # A residue range
             current_node.node_tree = mol_append_node('MOL_sel_res_id_range')
-            residue_id_group.links.new(residue_id_group_in.outputs[counter], current_node.inputs[0])
-            counter += 1
-            residue_id_group.links.new(residue_id_group_in.outputs[counter], current_node.inputs[1])
-
+            residue_id_group.links.new(residue_id_group_in.outputs[num_new_links], current_node.inputs[0])
+            num_new_links += 1
+            residue_id_group.links.new(residue_id_group_in.outputs[num_new_links], current_node.inputs[1])
+            num_new_links += 1
         else:
             # Create a node
             current_node.node_tree = mol_append_node('MOL_sel_res_id')
             # Link the input of MOL_sel_res_id
-            residue_id_group.links.new(residue_id_group_in.outputs[counter], current_node.inputs[0])
-
-        counter += 1
+            residue_id_group.links.new(residue_id_group_in.outputs[num_new_links], current_node.inputs[0])
+            num_new_links += 1
 
         # Set the coordinates
-        current_node.location = (200, residue_id_index * node_sep_dis + node_sep_dis)
+        current_node.location = (200, i * node_sep_dis + node_sep_dis)
 
-        if residue_id_index == 0:
+        if i == 0:
             # link the first residue selection to the first input of its OR block
             residue_id_group.links.new(current_node.outputs['Selection'],bool_math.inputs[0])
         else:
@@ -633,12 +628,12 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
 
     # Add output block
     residue_id_group_out = residue_id_group.nodes.new("NodeGroupOutput")
-    residue_id_group_out.location = (800, (residue_id_index + 1) / 2 * node_sep_dis)
+    residue_id_group_out.location = (800, (i + 1) / 2 * node_sep_dis)
     residue_id_group.outputs.new("NodeSocketBool", "Selection")
     residue_id_group.outputs.new("NodeSocketBool", "Inverted")
     residue_id_group.links.new(previous_bool_node.outputs[0], residue_id_group_out.inputs['Selection'])
     invert_bool_math = residue_id_group.nodes.new("FunctionNodeBooleanMath")
-    invert_bool_math.location = (600, (residue_id_index + 1) / 3 * 2 * node_sep_dis)
+    invert_bool_math.location = (600, (i + 1) / 3 * 2 * node_sep_dis)
     invert_bool_math.operation = "NOT"
     residue_id_group.links.new(previous_bool_node.outputs[0], invert_bool_math.inputs[0])
     residue_id_group.links.new(invert_bool_math.outputs[0], residue_id_group_out.inputs['Inverted'])

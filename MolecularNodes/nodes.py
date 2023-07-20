@@ -41,25 +41,22 @@ def activate_molecular_nodes_modifier_on(obj: Object):
     return obj.modifiers.active
 
 
-def mol_append_node(node_name: str):
-    if (node_group := bpy.data.node_groups.get(node_name)) is not None:
-        return node_group
-    bpy.ops.wm.append(
-        directory=os.path.join(pkg.ADDON_DIR, 'assets', 'node_append_file.blend/NodeTree'),
-        filename=node_name, link=False)
-    return bpy.data.node_groups[node_name]
-
-
-def mol_base_material(mat_name: str = 'MOL_atomic_material'):
-    ''' Append material to the .blend file (if it doesn't already exist).
-        Return the material.
+def get_asset(collection, name: str, path_suffix: str):
+    ''' Get or create the asset called `name`.
+        If it doesn't already exist, append it to the .blend file.
     '''
-    if (material := bpy.data.materials.get(mat_name)) is not None:
-        return material
-    bpy.ops.wm.append(
-        directory=os.path.join(pkg.ADDON_DIR, 'assets', 'node_append_file.blend/Material'),
-        filename='MOL_atomic_material', link=False)
-    return bpy.data.materials[mat_name]
+    if (asset := collection.get(name)) is not None:
+        return asset
+    bpy.ops.wm.append(directory=os.path.join(
+        pkg.ADDON_DIR, 'assets', f'node_append_file.blend/{path_suffix}'
+    ), filename=name, link=False)
+    return collection[name]
+
+def mol_append_node(node_name: str):
+    return get_asset(bpy.data.node_groups, node_name, 'NodeTree')
+
+def mol_base_material(material_name: str = 'MOL_atomic_material'):
+    return get_asset(bpy.data.materials, material_name, 'Material')
 
 
 def gn_new_group_empty(name: str = "Geometry Nodes") -> GeometryNodeTree:

@@ -82,8 +82,8 @@ def add_custom_node_group_to_node(
     parent_group, node_name: str, location: tuple[float, float] = (0, 0), width: int = 200
 ) -> GeometryNodeGroup:
     mol_append_node(node_name)
-    node: GeometryNodeGroup = new_node_in_group(parent_group, 'GeometryNodeGroup',
-                                                location=location)
+    node: GeometryNodeGroup = new_node_in_group(
+        parent_group, 'GeometryNodeGroup', location=location)
     node.node_tree = bpy.data.node_groups[node_name]
     node.width = width  # TODO Check that this works
     return node
@@ -96,7 +96,6 @@ def add_custom_node_group(parent_group, node_name, location=(0, 0), width=200):
 def create_starting_nodes_starfile(obj):
 
     node_mod = activate_molecular_nodes_modifier_on(obj)
-
     node_name = f"MOL_starfile_{obj.name}"
 
     # If there already exists a node tree by this name, use that
@@ -135,17 +134,15 @@ def create_starting_nodes_starfile(obj):
     node_subtract.inputs[0].default_value = 1
 
     node_compare = new_node_in_group(node_group, "FunctionNodeCompare",
-                                     location=(320, 200))
+                                     data_type='INT', location=(320, 200))
     node_compare.operation = "NOT_EQUAL"
-    node_compare.data_type = "INT"
 
     node_object_info = new_node_in_group(node_group, "GeometryNodeObjectInfo",
                                          location=(200, -200))
 
     node_get_rotation = new_node_in_group(node_group, "GeometryNodeInputNamedAttribute",
-                                          location=(450, -200))
+                                          data_type='FLOAT_VECTOR', location=(450, -200))
     node_get_rotation.inputs['Name'].default_value = "MOLRotation"
-    node_get_rotation.data_type = "FLOAT_VECTOR"
 
     node_get_id = new_node_in_group(node_group, "GeometryNodeInputID",
                                     location=(0, -200))
@@ -225,8 +222,8 @@ def create_starting_nodes_density(obj, threshold: float = 0.8):
 def create_starting_node_tree(obj, coll_frames, starting_style = "atoms"):
 
     node_mod = activate_molecular_nodes_modifier_on(obj)
-
     name = f"MOL_{obj.name}"
+
     # If a node group by this name already exists, use it and make no changes
     if (node_group := bpy.data.node_groups.get(name)) is not None:
         node_mod.node_group = node_group
@@ -380,18 +377,16 @@ def rotation_matrix(node_group, mat, location: tuple[float, float] = (0, 0), wor
     Returns:
         _type_: Newly created node tree.
     """
-    node = node_group.nodes.new('GeometryNodeGroup')
+    node = new_node_in_group(node_group, 'GeometryNodeGroup', location=location)
     node.node_tree = mol_append_node('MOL_utils_rot_trans')
-    node.location = location
     # Calculate Euler angles from rotation matrix
-    rotation = Rotation.from_matrix(mat[:3, :3]).as_euler('xyz')
-    # Set values for new node
-    node.inputs[0].default_value[:3] = rotation[:3]  # Set rotation
-    node.inputs[1].default_value[:3] = mat[:3, 3:][:3] * world_scale  # Set translation
+    rotation = Rotation.from_matrix(mat[:3,:3]).as_euler('xyz')
+    node.inputs[0].default_value[:3] = rotation[:3]                   # Set rotation
+    node.inputs[1].default_value[:3] = mat[:3,3:][:3] * world_scale  # Set translation
     return node
 
 
-def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0, format=lambda s: s):
+def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0, format=str):
     """
     Given a list of chain names, will create a node which takes an Integer input,
     and has a boolean tick box for each item in the input list.
@@ -419,13 +414,13 @@ def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0
     # Create a boolean input for the group for each item in the list
     for chain_name in chain_names:
         # Create a boolean input for the name, and name it after the chain
-        chain_group.inputs.new("NodeSocketBool", format(str(chain_name)))
+        chain_group.inputs.new("NodeSocketBool", format(chain_name))
     node_sep_dis = 180  # Horizontal distance between nodes
     i: int = 0
     for chain_name in chain_names:
         current_node = new_node_in_group(chain_group, "GeometryNodeGroup", location=(i * node_sep_dis, 200))
         current_node.node_tree = mol_append_node('MOL_utils_bool_chain')
-        current_node.inputs["number_matched"].default_value = i + start
+        current_node.inputs['number_matched'].default_value = i + start
         # link from the the named attribute node chain_number into the other inputs
         if i == 0:
             # for some reason, you can't link with the first output of the named attribute node. Might
@@ -437,7 +432,7 @@ def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0
                     chain_group.links.new(chain_number_node.outputs[j], current_node.inputs['number_chain_in'])
                 except:  # What kinds of exception are expected?
                     continue
-        chain_group.links.new(chain_group_in.outputs[i], current_node.inputs["bool_include"])
+        chain_group.links.new(chain_group_in.outputs[i], current_node.inputs['bool_include'])
         if i > 0:
             chain_group.links.new(previous_node.outputs['number_chain_out'], current_node.inputs['number_chain_in'])
             chain_group.links.new(previous_node.outputs['bool_chain_out'], current_node.inputs['bool_chain_in'])
@@ -464,7 +459,7 @@ def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0
     return chain_group
 
 
-def chain_color(node_name, input_list, label_prefix: str = "Chain "):
+def chain_color(node_name, input_list, format=lambda s: f"Chain {s}"):
     """
     Given the input list of chain names, will create a node group which uses
     the chain_id named attribute to manually set the colours for each of the chains.
@@ -487,7 +482,7 @@ def chain_color(node_name, input_list, label_prefix: str = "Chain "):
     node_sep_dis = 180  # Horizontal distance between nodes
     for i, chain_name in enumerate(input_list):
         x = i * node_sep_dis
-        current_chain = str(label_prefix) + str(chain_name)
+        current_chain = format(chain_name)
         # Node compare inputs 2 & 3
         node_compare = new_node_in_group(chain_group, 'FunctionNodeCompare',
                                          data_type='INT', location=(x, 100))

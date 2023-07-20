@@ -403,11 +403,10 @@ class MOL_OT_Color_Chain(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        obj = context.active_object
         try:
             node_color_chain = nodes.chain_color(
-                node_name=f"MOL_color_chains_{obj.name}",
-                input_list=obj['chain_id_unique'])
+                node_name=f"MOL_color_chains_{context.active_object.name}",
+                input_list=context.active_object['chain_id_unique'])
             mol_add_node(node_color_chain.name)
         except:
             self.report({'WARNING'}, message='Unable to detect chain information.')
@@ -415,8 +414,7 @@ class MOL_OT_Color_Chain(bpy.types.Operator):
 
 
 def menu_chain_selection_custom(layout_function):
-    obj = bpy.context.view_layer.objects.active
-    label = f'Chain {obj.name}'
+    label = f'Chain {bpy.context.view_layer.objects.active.name}'
     op = layout_function.operator('mol.chain_selection_custom',
                                   text=label, emboss=True, depress=True)
 
@@ -435,10 +433,9 @@ class MOL_OT_Chain_Selection_Custom(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        obj = bpy.context.view_layer.objects.active
         node_chains = nodes.chain_selection(
-            node_name=f"MOL_sel_{obj.name}_chains",
-            chain_names=obj["chain_id_unique"],
+            node_name=f"MOL_sel_{bpy.context.view_layer.objects.active.name}_chains",
+            chain_names=bpy.context.view_layer.objects.active["chain_id_unique"],
             attribute="chain_id",
             format=lambda s: f"Chain {s}")
         mol_add_node(node_chains.name)

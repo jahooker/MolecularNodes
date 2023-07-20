@@ -3,6 +3,7 @@ import numpy as np
 from . import nodes
 import biotite.structure.io.pdbx as pdbx
 import re
+from typing import Iterator
 
 def get_transformations_pdbx(file_pdbx) -> dict:
     # The output has an entry for each transformation,
@@ -27,19 +28,18 @@ def get_transformations_pdb(file_pdb):
         yield (sym_array[i:i+3,:3],
                sym_array[i:i+3,3:].reshape((1, 3)))
 
-def get_transformations_mmtf(assemblies) -> np.ndarray[float]:
+def get_transformations_mmtf(assemblies) -> Iterator[np.ndarray[float]]:
     """
-    Returns a (N, 3, 4) `numpy.ndarray`, where N is the number of transformations required
-    to build out the biological assembly. Currently only extracts and supports the
-    first biological assembly, but this should be straightforward to expand to more assemblies.
-    That would require more tweaking with node creation.
+    Generates the transformations required to build out each biological assembly
+    as a N×3×4 `numpy.ndarray` where N is the number of transformations.
     """
-    assembly = assemblies[0]['transformList']
-    n = len(assembly)
-    # FIXME nx3x4 or nx4x4?
-    return np.array([item['matrix'] for item in assembly]).reshape((n, 4, 4))
+    for assembly in assemblies:
+        transforms = assembly['transformList']
+        n = len(transforms)
+        # FIXME nx3x4 or nx4x4?
+        yield np.array([transform['matrix'] for transform in transforms]).reshape((n, 4, 4))
 
-def create_assembly_node(name, transformation_matrices: list):
+def create_assembly_node(name, transformation_matrices: list[np.ndarray[float]]):
 
     if (node_mat := bpy.data.node_groups.get(f'MOL_RotTransMat_{name}')):
         return node_mat

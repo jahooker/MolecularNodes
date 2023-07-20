@@ -360,11 +360,12 @@ class MOL_OT_Assembly_Bio(bpy.types.Operator):
         return True
 
     def execute(self, context):
-        obj = context.active_object
         try:
+            transformations = assembly.get_transformations_mmtf(context.active_object['bio_transform_dict'])
             node_bio_assembly = assembly.create_biological_assembly_node(
-                name=obj.name,
-                transforms=assembly.get_transformations_mmtf(obj['bio_transform_dict']))
+                name=context.active_object.name, transforms=next(transformations))
+            # Currently, we only get transformations for the first biological assembly.
+            # To extract the rest would require that we adjust node creation.
         except:
             self.report({'WARNING'}, message='Unable to detect biological assembly information.')
             return {"FINISHED"}

@@ -46,15 +46,15 @@ def create_assembly_node(name, transformation_matrices: list[np.ndarray[float]])
 
     node_mat = nodes.gn_new_group_empty(f'MOL_RotTransMat_{name}')
     node_mat.inputs.remove(node_mat.inputs['Geometry'])
-    node_mat.nodes['Group Output'].location = [800, 0]
+    node_mat.nodes['Group Output'].location = (800, 0)
     node_mat.outputs['Geometry'].name = 'RotTransMat'
 
     node_transforms = [nodes.rotation_matrix(
-        node_group=node_mat, mat=mat, location=[0, 300 * -i]
+        node_group=node_mat, mat=mat, location=(0, 300 * -i)
     ) for i, mat in enumerate(transformation_matrices)]
 
     node_join = node_mat.nodes.new('GeometryNodeJoinGeometry')
-    node_join.location = [300, 0]
+    node_join.location = (300, 0)
 
     for node_transform in reversed(node_transforms):
         node_mat.links.new(node_transform.outputs['Geometry'], node_join.inputs['Geometry'])
@@ -74,9 +74,9 @@ def create_biological_assembly_node(name, transformation_matrices: list):
 
     node_bio = nodes.gn_new_group_empty(f'MOL_assembly_{name}')
 
-    node_input = node_bio.nodes[bpy.app.translations.pgettext_data("Group Input",)]
+    node_input  = node_bio.nodes[bpy.app.translations.pgettext_data("Group Input", )]
     node_output = node_bio.nodes[bpy.app.translations.pgettext_data("Group Output",)]
-    node_output.location = [400, 0]
+    node_output.location = (400, 0)
 
     node_assembly = nodes.add_custom_node_group_to_node(node_bio, 'MOL_utils_bio_assembly', location=(0, 0))
 
@@ -86,12 +86,9 @@ def create_biological_assembly_node(name, transformation_matrices: list):
     node_bio.links.new(node_trans.outputs['RotTransMat'], node_assembly.inputs['RotTransMat'])
     node_bio.links.new(node_assembly.outputs['Instances'], node_output.inputs[0])
 
-    node_bio.inputs.new('NodeSocketFloat', 'Scale Rotation')
-    node_bio.inputs.get('Scale Rotation').default_value = 1
-    node_bio.links.new(node_input.outputs['Scale Rotation'], node_assembly.inputs['Scale Rotation'])
-
-    node_bio.inputs.new('NodeSocketFloat', 'Scale Translation')
-    node_bio.inputs.get('Scale Translation').default_value = 1
-    node_bio.links.new(node_input.outputs['Scale Translation'], node_assembly.inputs['Scale Translation'])
+    for name in ('Scale Rotation', 'Scale Translation'):
+        nsf = node_bio.inputs.new('NodeSocketFloat', name)
+        nsf.default_value = 1
+        node_bio.links.new(node_input.outputs[name], node_assembly.inputs[name])
 
     return node_bio

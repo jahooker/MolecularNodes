@@ -415,10 +415,9 @@ def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0
     for chain_name in chain_names:
         # Create a boolean input for the name, and name it after the chain
         chain_group.inputs.new("NodeSocketBool", format(chain_name))
-    node_sep_dis = 180  # Horizontal distance between nodes
-    i: int = 0
-    for chain_name in chain_names:
-        current_node = new_node_in_group(chain_group, "GeometryNodeGroup", location=(i * node_sep_dis, 200))
+    horizontal_margin = 180  # Horizontal distance between nodes
+    for i, chain_name in enumerate(chain_names):
+        current_node = new_node_in_group(chain_group, "GeometryNodeGroup", location=(i * horizontal_margin, 200))
         current_node.node_tree = mol_append_node('MOL_utils_bool_chain')
         current_node.inputs['number_matched'].default_value = i + start
         # link from the the named attribute node chain_number into the other inputs
@@ -437,14 +436,13 @@ def chain_selection(node_name, chain_names: list[str], attribute, start: int = 0
             chain_group.links.new(previous_node.outputs['number_chain_out'], current_node.inputs['number_chain_in'])
             chain_group.links.new(previous_node.outputs['bool_chain_out'], current_node.inputs['bool_chain_in'])
         previous_node = current_node
-        i += 1
 
-    chain_group_out = new_node_in_group(chain_group, "NodeGroupOutput", location=((i + 1) * node_sep_dis, 200))
+    chain_group_out = new_node_in_group(chain_group, "NodeGroupOutput", location=((i + 1) * horizontal_margin, 200))
     chain_group.outputs.new("NodeSocketBool", "Selection")
     chain_group.outputs.new("NodeSocketBool", "Inverted")
     chain_group.links.new(current_node.outputs['bool_chain_out'], chain_group_out.inputs['Selection'])
 
-    bool_math = new_node_in_group(chain_group, "FunctionNodeBooleanMath", location=(i * node_sep_dis, 50))
+    bool_math = new_node_in_group(chain_group, "FunctionNodeBooleanMath", location=(i * horizontal_margin, 50))
     bool_math.operation = "NOT"
     chain_group.links.new(current_node.outputs['bool_chain_out'], bool_math.inputs[0])
     chain_group.links.new(bool_math.outputs[0], chain_group_out.inputs['Inverted'])
@@ -479,9 +477,9 @@ def chain_color(node_name, input_list, format=lambda s: f"Chain {s}"):
     chain_number_node.inputs[0].default_value = 'chain_id'
     chain_number_node.outputs.get('Attribute')
 
-    node_sep_dis = 180  # Horizontal distance between nodes
+    horizontal_margin = 180  # Horizontal distance between nodes
     for i, chain_name in enumerate(input_list):
-        x = i * node_sep_dis
+        x = i * horizontal_margin
         current_chain = format(chain_name)
         # Node compare inputs 2 & 3
         node_compare = new_node_in_group(chain_group, 'FunctionNodeCompare',
@@ -529,7 +527,7 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
     # Parse input_resid_string into sub selecting string list
     sub_list = list(filter(bool, input_resid_string.split(',')))
 
-    node_sep_dis = -100  # Vertical distance between nodes
+    vertical_margin = 100  # Vertical distance between nodes
 
     activate_molecular_nodes_modifier_on(bpy.context.active_object)
 
@@ -538,7 +536,7 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
     # Required group node input
     residue_id_group_in = new_node_in_group(
         residue_id_group, "NodeGroupInput",
-        location=(0, node_sep_dis * len(sub_list) / 2))
+        location=(0, -vertical_margin * len(sub_list) / 2))
 
     for residue_id in sub_list:
 
@@ -556,7 +554,7 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
 
         # Add a bool_math block
         bool_math = new_node_in_group(residue_id_group, "FunctionNodeBooleanMath",
-                                      location=(400, i * node_sep_dis + node_sep_dis))
+                                      location=(400, -(i + 1) * vertical_margin))
         bool_math.operation = "OR"
 
         # Add a new node of MOL_sel_res_id or MOL_sek_res_id_range
@@ -577,7 +575,7 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
             num_new_links += 1
 
         # Set the coordinates
-        current_node.location = (200, i * node_sep_dis + node_sep_dis)
+        current_node.location = (200, -(i + 1) * vertical_margin)
 
         if i == 0:
             # link the first residue selection to the first input of its OR block
@@ -592,12 +590,12 @@ def resid_multiple_selection(node_name: str, input_resid_string: str):
 
     # Add output block
     residue_id_group_out = new_node_in_group(residue_id_group, "NodeGroupOutput",
-                                             location=(800, (i + 1) / 2 * node_sep_dis))
+                                             location=(800, -(i + 1) / 2 * vertical_margin))
     residue_id_group.outputs.new("NodeSocketBool", "Selection")
     residue_id_group.outputs.new("NodeSocketBool", "Inverted")
     residue_id_group.links.new(previous_bool_node.outputs[0], residue_id_group_out.inputs['Selection'])
     invert_bool_math = new_node_in_group(residue_id_group, "FunctionNodeBooleanMath",
-                                         location=(600, (i + 1) / 3 * 2 * node_sep_dis))
+                                         location=(600, -(i + 1) / 3 * 2 * vertical_margin))
     invert_bool_math.operation = "NOT"
     residue_id_group.links.new(previous_bool_node.outputs[0], invert_bool_math.inputs[0])
     residue_id_group.links.new(invert_bool_math.outputs[0], residue_id_group_out.inputs['Inverted'])

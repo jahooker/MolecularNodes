@@ -245,12 +245,12 @@ def att_res_id(mol_array: MolecularArray):
 
 @AttributeGetter.from_function(name='res_name', data_type='INT')
 def att_res_name(mol_array: MolecularArray, mol_object: Object):
-    id_counter = -1
     res_names = mol_array.res_name
-    res_ids = mol_array.res_id
-    res_nums: list[int] = []
+    res_ids   = mol_array.res_id
+    res_nums:  list[int] = []
     other_res: list[str] = []
 
+    id_counter: int = -1
     for i, name in enumerate(res_names):
 
         if name in data.residues:

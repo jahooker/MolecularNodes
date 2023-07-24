@@ -52,10 +52,11 @@ def load_star_file(
             df['rlnCoordinateZ'] = 0
 
         pixel_size = df['rlnImagePixelSize'].to_numpy().reshape((-1, 1))
-        xyz = pixel_size * df[['rlnCoordinateX', 'rlnCoordinateY', 'rlnCoordinateZ']].to_numpy()
+        xyz *= pixel_size
         shift_column_names = ['rlnOriginXAngst', 'rlnOriginYAngst', 'rlnOriginZAngst']
-        if all([col in df.columns for col in shift_column_names]):
-            xys -= df[shift_column_names].to_numpy()
+        shifts_ang = df[shift_column_names].to_numpy()
+        if all(col in df.columns for col in shift_column_names):
+            xyz -= shifts_ang 
         euler_angles = df[['rlnAngleRot', 'rlnAngleTilt', 'rlnAnglePsi']].to_numpy()
         image_id = df['rlnMicrographName'].astype('category').cat.codes.to_numpy()
 

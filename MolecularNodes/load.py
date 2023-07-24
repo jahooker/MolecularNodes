@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import bpy
 import numpy as np
 from . import coll
@@ -18,10 +19,17 @@ import biotite.structure.io.pdbx as pdbx
 from biotite.structure import spread_residue_wise, annotate_sse
 from biotite import InvalidFileError
 
-
 bpy.types.Scene.mol_pdb_code = bpy.props.StringProperty(
     name='pdb_code', description='The 4-character PDB code to download',
     options={'TEXTEDIT_UPDATE'}, default='1bna', subtype='NONE', maxlen=4
+)
+
+bpy.types.Scene.mol_cache_dir = bpy.props.StringProperty(
+    name='cache_dir',
+    description='Location to cache PDB files',
+    options={'TEXTEDIT_UPDATE'},
+    default=str(Path('~', '.MolecularNodes').expanduser()),
+    subtype='NONE'
 )
 
 bpy.types.Scene.mol_import_center = bpy.props.BoolProperty(
@@ -62,10 +70,10 @@ bpy.types.Scene.mol_import_default_style = bpy.props.IntProperty(
 
 def molecule_rcsb(
     pdb_code: str, center_molecule=False, del_solvent=True, include_bonds=True,
-    starting_style=0, setup_nodes=True
+    starting_style=0, setup_nodes=True, cache_dir=None,
 ):
 
-    mol, file = open_structure_rcsb(pdb_code=pdb_code, include_bonds=include_bonds)
+    mol, file = open_structure_rcsb(pdb_code=pdb_code, include_bonds=include_bonds, cache_dir=cache_dir)
 
     mol_object, coll_frames = create_molecule(
         mol_array=mol, mol_name=pdb_code, file=file, calculate_ss=False,
@@ -125,12 +133,12 @@ def molecule_local(
     return mol_object
 
 
-def open_structure_rcsb(pdb_code: str, include_bonds=True):
+def open_structure_rcsb(pdb_code: str, cache_dir=None, include_bonds=True):
     """
-    Returns a numpy array stack, where each array in the stack is a model in the the file.
+    Returns a numpy array stack, where each array in the stack is a model in the file.
     The stack will be of length 1 if there is only one model in the file.
     """
-    file = mmtf.MMTFFile.read(rcsb.fetch(pdb_code, "mmtf"))
+    file = mmtf.MMTFFile.read(rcsb.fetch(pdb_code, "mmtf", target_path=cache_dir))
     mol = mmtf.get_structure(file, extra_fields=["b_factor", "charge"], include_bonds=include_bonds)
     return mol, file
 
@@ -210,6 +218,7 @@ def get_secondary_structure(mol_array, file) -> np.ndarray[int]:
         ss_int = np.array([dssp_to_abc[sec_struct_codes[ss]] for ss in sse], dtype=int)
     return spread_residue_wise(mol_array, ss_int)
 
+MolecularArray: type = struc.AtomArray | struc.AtomArrayStack
 
 def comp_secondary_structure(mol_array: MolecularArray):
     """Use dihedrals to compute the secondary structure of proteins
@@ -229,9 +238,6 @@ def comp_secondary_structure(mol_array: MolecularArray):
     char_sse = annotate_sse(mol_array)
     int_sse = np.array([conv_sse_char_int[char] for char in char_sse], dtype=int)
     return spread_residue_wise(mol_array, int_sse)
-
-
-MolecularArray: type = struc.AtomArray | struc.AtomArrayStack
 
 @AttributeGetter.from_function(name='atomic_number', data_type='INT')
 def att_atomic_number(elements: np.ndarray[str]):

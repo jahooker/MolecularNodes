@@ -41,6 +41,9 @@ class Menu(bpy.types.Menu, Pollable):
 
     bl_label: str = ''
 
+    def invoke_default(self, layout=None):
+        (self.layout if layout is None else layout).operator_context = "INVOKE_DEFAULT"
+
     def interface(
         self, label: str, node_name: str,
         node_description: str = 'Add custom MolecularNodes node group.'
@@ -436,14 +439,14 @@ class MOL_OT_Ligand_Selection_Custom(Operator):
 class MOL_MT_Add_Node_Menu_Properties(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         # currently nothing for this menu in the panel
 
 
 class MOL_MT_Add_Node_Menu_Color(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Set Color', 'MOL_color_set',
             "Sets a new color for the selected atoms")
         self.interface('Set Color Common', 'MOL_color_set_common',
@@ -470,7 +473,7 @@ class MOL_MT_Add_Node_Menu_Color(Menu):
 class MOL_MT_Add_Node_Menu_Bonds(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Find Bonds', 'MOL_bonds_find',
             "Finds bonds between atoms based on distance.\n"
             "Based on the vdw_radii for each point, "
@@ -488,7 +491,7 @@ class MOL_MT_Add_Node_Menu_Bonds(Menu):
 class MOL_MT_Add_Node_Menu_Styling(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Atoms Cycles', 'MOL_style_atoms_cycles',
             'A sphere atom representation, visible ONLY in Cycles. \
             Based on point-cloud rendering.')
@@ -521,7 +524,7 @@ class MOL_MT_Add_Node_Menu_Styling(Menu):
 class MOL_MT_Add_Node_Menu_Selections(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Select Atoms', 'MOL_sel_atoms',
             "Separate atoms based on a selection field.\n "
             "Takes atoms and splits them into the selected atoms the inverted atoms, based on a selection field.")
@@ -582,7 +585,7 @@ class MOL_MT_Add_Node_Menu_Selections(Menu):
 class MOL_MT_Add_Node_Menu_Assembly(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.layout.operator(MOL_OT_Assembly_Bio.bl_idname,
                              text="Biological Assembly", emboss=True, depress=True)
         self.interface('Center Assembly', 'MOL_assembly_center',
@@ -592,14 +595,14 @@ class MOL_MT_Add_Node_Menu_Assembly(Menu):
 class MOL_MT_Add_Node_Menu_Membranes(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Setup Atomic Properties', 'MOL_prop_setup')
 
 
 class MOL_MT_Add_Node_Menu_DNA(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Double Helix', 'MOL_dna_double_helix',
             "Create a DNA double helix from an input curve.\n"
             "Takes an input curve and instances for the bases. "
@@ -620,7 +623,7 @@ class MOL_MT_Add_Node_Menu_DNA(Menu):
 class MOL_MT_Add_Node_Menu_Animation(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Animate Frames', 'MOL_animate_frames',
             "Interpolate between frames of a trajectory. "
             "Given a collection of frames for a trajectory, "
@@ -653,7 +656,7 @@ class MOL_MT_Add_Node_Menu_Animation(Menu):
 class MOL_MT_Add_Node_Menu_Utilities(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Boolean Chain', 'MOL_utils_bool_chain')
         self.interface('Rotation Matrix', 'MOL_utils_rotation_matrix')
         self.interface('Curve Resample', 'MOL_utils_curve_resample')
@@ -663,7 +666,7 @@ class MOL_MT_Add_Node_Menu_Utilities(Menu):
 class MOL_MT_Add_Node_Menu_Density(Menu):
 
     def draw(self, context):
-        self.layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default()
         self.interface('Style Surface', 'MOL_style_density_surface')
         self.interface('Style Wire', 'MOL_style_density_wire')
         self.interface('Sample Nearest Attribute', 'MOL_utils_sample_searest')
@@ -675,7 +678,7 @@ class MOL_MT_Add_Node_Menu(Menu):
 
     def draw(self, context):
         layout = self.layout.column_flow(columns=1)
-        layout.operator_context = "INVOKE_DEFAULT"
+        self.invoke_default(layout)
         layout.menu(MOL_MT_Add_Node_Menu_Styling.bl_idname,
                     text='Style', icon_value=77)
         layout.menu(MOL_MT_Add_Node_Menu_Color.bl_idname,

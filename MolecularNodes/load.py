@@ -95,18 +95,21 @@ def molecule_local(
     file_path = os.path.abspath(file_path)
     file_ext = os.path.splitext(file_path)[1]
 
-    if file_ext == '.pdb':
-        mol, file = open_structure_local_pdb(file_path, include_bonds)
-        transforms = list(assembly.get_transformations_pdb(file))
-    elif file_ext == '.pdbx' or file_ext == '.cif':
-        mol, file = open_structure_local_pdbx(file_path, include_bonds)
-        try:
-            transforms = assembly.get_transformations_pdbx(file)
-        except:
-            transforms = None
-            # self.report({"WARNING"}, message='Unable to parse biological assembly information.')
-    else:
-        warnings.warn("Unable to open local file. Format not supported.")
+    # XXX What is the intended type of transforms?
+    # Should it be a list, a dict, something else entirely?
+    match file_ext:
+        case '.pdb':
+            mol, file = open_structure_local_pdb(file_path, include_bonds)
+            transforms = list(assembly.get_transformations_pdb(file))
+        case '.pdbx' | '.cif':
+            mol, file = open_structure_local_pdbx(file_path, include_bonds)
+            try:
+                transforms = assembly.get_transformations_pdbx(file)
+            except:
+                transforms = None
+                # self.report({"WARNING"}, message='Unable to parse biological assembly information.')
+        case _:
+            warnings.warn("Unable to open local file. Format not supported.")
 
     # If include_bonds is chosen but no bonds currently exist (mol.bonds is None),
     # then attempt to find bonds by distance.
